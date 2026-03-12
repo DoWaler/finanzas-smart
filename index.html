@@ -468,7 +468,7 @@ function rGastos(){
     <div class="cf fu" style="display:flex;align-items:center;gap:10px">
       <span style="font-size:16px">📂</span>
       <label style="flex:1;font-size:13px;color:var(--blue);font-weight:700;cursor:pointer">
-        Importar CSV del banco <input type="file" accept=".csv" style="display:none" onchange="handleCSV(this)"/>
+        Importar CSV del banco <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleCSV(this)"/>
       </label>
       <span class="tag tgr">Santander · BBVA</span>
     </div>
@@ -1045,6 +1045,9 @@ window.saveSettings=async()=>{
 
 window.handleCSV=input=>{
   const file=input.files[0];if(!file) return;
+  const isXlsx=file.name.endsWith('.xlsx')||file.name.endsWith('.xls');
+  if(isXlsx){ parseXlsx(file); input.value=''; return; }
+  // CSV fallback
   const r=new FileReader();
   r.onload=async ev=>{
     const lines=ev.target.result.split('\n').filter(Boolean);let n=0;
@@ -1054,23 +1057,110 @@ window.handleCSV=input=>{
       if(cols.length<3) return;
       const [date,desc,ar]=cols;const amt=parseFloat(ar.replace(',','.'));
       if(!isNaN(amt)&&amt<0){
-        const exp={id:gid(),desc,amount:Math.abs(amt),cat:'other',date,fixed:false,src:'csv'};
+        const exp={id:gid(),desc,amount:Math.abs(amt),cat:guessCategory(desc),date:normalizeDate(date),fixed:false,src:'csv'};
         S.expenses.push(exp);newExps.push(exp);n++;
       }
     });
     if(!n){toast('Sin gastos válidos');return;}
     toast(`✓ ${n} gastos importados`);render();
-    localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
-    for(const exp of newExps){
-      try{
-        await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
-          description:exp.desc,amount:exp.amount,category:exp.cat,date:exp.date,fixed:false,source:'csv'
-        })});
-      }catch{break;}
-    }
+    await uploadExpenses(newExps);
   };
-  r.readAsText(file);input.value='';
+  r.readAsText(file,input.value='');
 };
+
+// Normaliza DD/MM/YYYY → YYYY-MM-DD
+function normalizeDate(d){
+  if(!d) return new Date().toISOString().slice(0,10);
+  if(d.includes('-')&&d.indexOf('-')===4) return d.slice(0,10); // ya es ISO
+  const parts=d.split('/');
+  if(parts.length===3) return `${parts[2].slice(0,4)}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+  return d.slice(0,10);
+}
+
+// Limpia el importe especial de Santander (guión especial − vs -)
+function cleanAmount(raw){
+  if(!raw&&raw!==0) return NaN;
+  // Santander usa U+2212 (minus sign) en lugar de U+002D (hyphen)
+  const cleaned=String(raw).replace(/\u2212/g,'-').replace(/\./g,'').replace(',','.');
+  return parseFloat(cleaned);
+}
+
+async function parseXlsx(file){
+  // Cargar SheetJS dinámicamente
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res;s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+  // Buscar la fila de cabecera (la que tiene "Fecha operación" o "Concepto")
+  let headerIdx=rows.findIndex(r=>
+    r.some(c=>String(c).toLowerCase().includes('fecha operaci'))
+  );
+  if(headerIdx<0) headerIdx=6; // fallback: fila 7 (índice 6)
+
+  const header=rows[headerIdx].map(c=>String(c).toLowerCase().trim());
+  const iDate  =header.findIndex(c=>c.includes('fecha op'));
+  const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
+  const iAmount=header.findIndex(c=>c.includes('importe'));
+
+  if(iDate<0||iDesc<0||iAmount<0){
+    toast('❌ Formato no reconocido');return;
+  }
+
+  const newExps=[];let n=0;
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const row=rows[i];
+    if(!row||!row[iDate]) continue;
+    const rawAmt=cleanAmount(row[iAmount]);
+    if(isNaN(rawAmt)||rawAmt>=0) continue; // solo gastos
+
+    // Fecha: puede venir como string DD/MM/YYYY o como Date
+    let dateStr='';
+    const rawDate=row[iDate];
+    if(rawDate instanceof Date){
+      dateStr=rawDate.toISOString().slice(0,10);
+    } else {
+      dateStr=normalizeDate(String(rawDate));
+    }
+
+    const desc=String(row[iDesc]).trim()||'Gasto';
+    const exp={
+      id:gid(),
+      desc,
+      amount:Math.abs(rawAmt),
+      cat:guessCategory(desc),
+      date:dateStr,
+      fixed:false,
+      src:'santander_xlsx',
+    };
+    S.expenses.push(exp);newExps.push(exp);n++;
+  }
+
+  if(!n){toast('Sin gastos válidos en el archivo');return;}
+  toast(`✓ ${n} gastos importados`);render();
+  localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
+  await uploadExpenses(newExps);
+}
+
+async function uploadExpenses(exps){
+  for(const exp of exps){
+    try{
+      await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
+        description:exp.desc,amount:exp.amount,category:exp.cat,
+        date:exp.date,fixed:false,source:exp.src||'csv'
+      })});
+    }catch{break;}
+  }
+}
+
 
 window.manualSync=()=>syncFromWorker(false);
 window.logout=()=>doLogout();
