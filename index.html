@@ -804,7 +804,10 @@ function renderModal(){
         <button class="btn bol bfw" onclick="closeModal()">Cancelar</button>
         <button class="btn bdk bfw" onclick="saveSettings()">Guardar</button>
       </div>
-      <button class="btn bdg bfw bsm" onclick="closeModal();logout()">Cerrar sesión</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn bdg bfw bsm" onclick="closeModal();logout()">Cerrar sesión</button>
+        <button class="btn bdg bfw bsm" onclick="clearLocalData()">🗑 Borrar datos locales</button>
+      </div>
     </div></div>`;
   }
 
@@ -1013,6 +1016,18 @@ window.saveIncome=async()=>{
 window.setView=v=>{S.view=v;render();};
 window.setMonth=i=>{S.month=i;render();};
 window.setYear=y=>{S.year=y;render();};
+
+window.clearLocalData=()=>{
+  if(!confirm('¿Borrar todos los datos locales? Los datos del servidor no se eliminan.')) return;
+  ['fs_expenses','fs_goals','fs_settings','fs_incomes','fs_extra_incomes'].forEach(k=>localStorage.removeItem(k));
+  S.expenses=[];
+  S.goals=[];
+  S.incomes={};
+  S.extraIncomes=[];
+  closeModal();
+  toast('🗑 Datos locales borrados — sincroniza para recargar del servidor');
+  render();
+};
 
 document.getElementById('thbtn').onclick=()=>{
   S.theme=S.theme==='light'?'dark':'light';
