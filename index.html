@@ -1121,7 +1121,13 @@ window.handleCSV=input=>{
       });
       n++;
     }
-    S.expenses.push(...newExps);
+    // Deduplicar — no añadir si ya existe mismo date+desc+amount
+    const dedupKey=e=>`${e.date}|${e.desc}|${e.amount}`;
+    const existing=new Set(S.expenses.map(dedupKey));
+    const unique=newExps.filter(e=>!existing.has(dedupKey(e)));
+    const dupes=newExps.length-unique.length;
+    S.expenses.push(...unique);
+    n=unique.length;
 
     if(!n){
       toast(`❌ Sin gastos. ${skipped} filas saltadas (ingresos o formato). Primer importe: "${lines[headerIdx+1]?parseCSVLine(lines[headerIdx+1])[iAmount]:'vacío'}"`);
