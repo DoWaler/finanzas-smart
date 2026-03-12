@@ -1136,6 +1136,21 @@ window.handleCSV=input=>{
   input.value='';
 };
 
+function guessCategory(m){
+  if(!m) return "other";
+  const s=m.toLowerCase();
+  if(/mercadona|lidl|aldi|carrefour|dia|supermercado|eroski|alcampo|consum/.test(s)) return "food";
+  if(/repsol|bp|cepsa|galp|gasolinera|parking|metro|renfe|cabify|uber|blablacar/.test(s)) return "transport";
+  if(/netflix|spotify|hbo|disney|prime|twitch|steam|playstation|xbox|cine/.test(s)) return "leisure";
+  if(/zara|mango|primark|h&m|pull|bershka|stradivarius|nike|adidas/.test(s)) return "clothing";
+  if(/restaurante|burger|mcdonalds|kfc|telepizza|dominos|glovo|deliveroo|taberna|cerveceria|cafeteria/.test(s)) return "dining";
+  if(/farmacia|medico|hospital|clinica|dentista|optica|sanitas/.test(s)) return "health";
+  if(/amazon|apple|fnac|mediamarkt|ikea|leroy|pccomponentes/.test(s)) return "tech";
+  if(/alquiler|hipoteca|comunidad|luz|agua|gas|internet|vodafone|movistar|orange/.test(s)) return "housing";
+  if(/spotify|netflix|hbo|disney|prime|apple one|youtube premium|adobe/.test(s)) return "subs";
+  return "other";
+}
+
 // Normaliza DD/MM/YYYY → YYYY-MM-DD
 function normalizeDate(d){
   if(!d) return new Date().toISOString().slice(0,10);
