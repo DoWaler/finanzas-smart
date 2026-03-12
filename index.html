@@ -188,6 +188,7 @@ const S={
   snowballExtra:0,
   pendingDeleteGoalId:null,
   incomes:{},  // {"2026-03": 1400, "2026-02": 4200, ...}
+  extraIncomes:[],  // [{id,date,key,amount,desc}]
   pendingEditExpenseId:null,
 };
 
@@ -209,15 +210,17 @@ function toast(msg){
 function getMonthKey(yr,mi){ return `${yr}-${String(mi+1).padStart(2,'0')}`; }
 function getIncome(yr,mi){
   const key=getMonthKey(yr,mi);
-  // 1. Ingreso manual guardado
+  // Solo nómina/salario — los ingresos extra se descuentan de gastos, no suman aquí
   if(S.incomes[key]) return S.incomes[key];
-  // 2. Detectar nómina en los gastos (importes positivos marcados como ingreso)
-  const pfx=key;
-  const nomina=S.expenses.filter(e=>e.date&&e.date.startsWith(pfx)&&e.isIncome);
-  if(nomina.length) return nomina.reduce((s,e)=>s+e.amount,0);
-  // 3. Proyección del año anterior con IPC
   const proj=S.settings.lastYearIncomes.map(v=>Math.round(v*(1+S.settings.ipcRate/100)));
   return proj[mi]||0;
+}
+
+// Devuelve el total de ingresos extra del mes (bizums, devoluciones...)
+// Se usa para reducir el gasto neto, no para inflar el ingreso
+function getExtrasTotal(yr,mi){
+  const key=getMonthKey(yr,mi);
+  return (S.extraIncomes||[]).filter(x=>x.key===key).reduce((s,x)=>s+x.amount,0);
 }
 function getBudget(mi){
   const proj=S.settings.lastYearIncomes.map(v=>Math.round(v*(1+S.settings.ipcRate/100)));
@@ -334,7 +337,9 @@ function pillsHtml(){
 function rHome(){
   const b=getBudget(S.month);
   const exps=mExp(S.month);
-  const spent=exps.reduce((s,e)=>s+e.amount,0);
+  const grossSpent=exps.reduce((s,e)=>s+e.amount,0);
+  const extrasBack=getExtrasTotal(S.year,S.month);
+  const spent=Math.max(0,grossSpent-extrasBack);
   const dLeft=daysToPayday();
   const pred=prediction();
   const survivor=survivorActive();
@@ -502,6 +507,32 @@ function rGastos(){
         <button class="btn bdk bsm" onclick="openModal('income')">✏️ Editar</button>
       </div>
     </div>
+
+    <!-- Ingresos extra del mes -->
+    ${(()=>{
+      const key=getMonthKey(S.year,S.month);
+      const extras=(S.extraIncomes||[]).filter(x=>x.key===key);
+      if(!extras.length) return '';
+      const total=extras.reduce((s,x)=>s+x.amount,0);
+      return`<div class="card fu" style="border-left:3px solid var(--blue)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div class="lbl">Ingresos extra ${MONTHS[S.month]}</div>
+            <div style="font-size:20px;font-weight:800;color:var(--blue)">+${fmt(total)}</div>
+          <div style="font-size:11px;color:var(--blue);opacity:.8">Se descuenta de tus gastos del mes</div>
+          </div>
+          <span style="font-size:22px">💸</span>
+        </div>
+        ${extras.map(x=>`<div class="fvr">
+          <div style="width:32px;height:32px;border-radius:50%;background:#EBF4FF;display:flex;align-items:center;justify-content:center;font-size:14px">💸</div>
+          <div style="flex:1;margin-left:10px;min-width:0">
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.desc.slice(0,50)}</div>
+            <div style="font-size:11px;color:var(--text3)">${x.date}</div>
+          </div>
+          <div style="font-weight:700;color:var(--blue)">+${fmtD(x.amount)}</div>
+        </div>`).join('')}
+      </div>`;
+    })()}
 
     <div class="cf fu" style="display:flex;align-items:center;gap:10px">
       <span style="font-size:16px">📂</span>
@@ -888,13 +919,27 @@ let _incomeIdx=0;
 
 function checkUnassignedIncomes(candidates){
   if(!candidates||!candidates.length) return;
-  // Filtrar solo los que no tienen ingreso ya asignado
-  _incomeCandidates=candidates.filter(c=>{
+
+  // Ingresos extra (bizum, transferencias, devoluciones) — guardar directamente
+  const extras=candidates.filter(c=>c.type==='extra');
+  extras.forEach(c=>{
+    if(!S.extraIncomes) S.extraIncomes=[];
+    const exists=S.extraIncomes.some(x=>x.date===c.date&&x.desc===c.desc&&x.amount===c.amount);
+    if(!exists) S.extraIncomes.push({id:gid(),date:c.date,key:c.key,amount:c.amount,desc:c.desc});
+  });
+  if(extras.length){
+    localStorage.setItem('fs_extra_incomes',JSON.stringify(S.extraIncomes));
+    toast(`✓ ${extras.length} ingreso(s) extra guardados`);
+    render();
+  }
+
+  // Nóminas — preguntar una a una
+  _incomeCandidates=candidates.filter(c=>c.type==='salary'&&(()=>{
     const months=incomeMonthsForPayday(c.date);
     return months.some(m=>!S.incomes[m]);
-  });
+  })());
   _incomeIdx=0;
-  if(_incomeCandidates.length) showNextIncomeCandidate();
+  if(_incomeCandidates.length) setTimeout(showNextIncomeCandidate, extras.length?1200:0);
 }
 
 function showNextIncomeCandidate(){
@@ -1213,6 +1258,8 @@ function loadLocalCache(){
     if(cfg) S.settings={...S.settings,...JSON.parse(cfg)};
     const inc=localStorage.getItem('fs_incomes');
     if(inc) S.incomes={...S.incomes,...JSON.parse(inc)};
+    const ei=localStorage.getItem('fs_extra_incomes');
+    if(ei) S.extraIncomes=[...S.extraIncomes,...JSON.parse(ei)];
   }catch{}
 }
 
@@ -1359,11 +1406,15 @@ window.handleCSV=input=>{
         .replace(',','.');
       const amt=parseFloat(amtClean);
 
-      // Detectar ingresos/nóminas
+      // Detectar ingresos (positivos)
       if(!isNaN(amt)&&amt>0){
+        const dateStr=normalizeDate(rawDate);
+        const key=dateStr.slice(0,7);
         if(INCOME_KEYWORDS.test(desc)){
-          const dateStr=normalizeDate(rawDate);
-          csvCandidates.push({date:dateStr,key:dateStr.slice(0,7),amount:amt,desc});
+          csvCandidates.push({date:dateStr,key,amount:amt,desc,type:'salary'});
+        } else {
+          // Bizum, transferencia recibida, devolución, etc.
+          csvCandidates.push({date:dateStr,key,amount:amt,desc,type:'extra'});
         }
         skipped++;continue;
       }
