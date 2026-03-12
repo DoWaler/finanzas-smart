@@ -172,31 +172,20 @@ const CATS=[
 
 const S={
   view:'home', month:new Date().getMonth(), theme:localStorage.getItem('theme')||'light', modal:null,
-  workerUrl:localStorage.getItem('worker_url')||'', apiKey:localStorage.getItem('api_key')||'',
+  workerUrl:localStorage.getItem('worker_url')||'',
+  token:localStorage.getItem('fs_token')||'',
+  username:localStorage.getItem('fs_username')||'',
+  loggedIn:false,
   settings:{payDay:25,savingsRate:10,ipcRate:3.2,survivorMode:true,
-    lastYearIncomes:[1400,4200,1400,1400,1400,1400,4200,1400,1400,1400,1400,4200],
-    savingsStreak:2,prevMonthSavings:180},
-  expenses:[
-    {id:'e1',desc:'Alquiler',amount:700,cat:'housing',date:'2026-03-01',fixed:true,src:'manual'},
-    {id:'e2',desc:'Mercadona',amount:92,cat:'food',date:'2026-03-04',fixed:false,src:'manual'},
-    {id:'e3',desc:'Netflix',amount:13,cat:'subs',date:'2026-03-05',fixed:true,src:'revolut'},
-    {id:'e4',desc:'Metro mensual',amount:40,cat:'transport',date:'2026-03-06',fixed:true,src:'manual'},
-    {id:'e5',desc:'Restaurante',amount:48,cat:'dining',date:'2026-03-08',fixed:false,src:'revolut'},
-    {id:'e6',desc:'Spotify',amount:9.99,cat:'subs',date:'2026-03-01',fixed:true,src:'revolut'},
-    {id:'e7',desc:'Farmacia',amount:22,cat:'health',date:'2026-03-10',fixed:false,src:'revolut'},
-    {id:'e8',desc:'Zara',amount:65,cat:'clothing',date:'2026-03-09',fixed:false,src:'manual'},
-    {id:'e9',desc:'Gasolinera',amount:55,cat:'transport',date:'2026-03-11',fixed:false,src:'revolut'},
-    {id:'e10',desc:'Amazon Prime',amount:4.99,cat:'subs',date:'2026-03-01',fixed:true,src:'revolut'},
-    {id:'e11',desc:'Café',amount:2.5,cat:'dining',date:'2026-03-03',fixed:false,src:'revolut'},
-    {id:'e12',desc:'Café',amount:2.5,cat:'dining',date:'2026-03-05',fixed:false,src:'revolut'},
-    {id:'e13',desc:'Café',amount:2.5,cat:'dining',date:'2026-03-07',fixed:false,src:'revolut'},
-  ],
+    lastYearIncomes:[0,0,0,0,0,0,0,0,0,0,0,0],
+    savingsStreak:0,prevMonthSavings:0},
+  expenses:[],
   goals:[
-    {id:'emergency',l:'Fondo emergencia',e:'🛡️',color:'#2D9B6F',bg:'#E8F5EE',target:6000,saved:1200,monthly:150,priority:1,deletable:false},
-    {id:'vacation',l:'Vacaciones',e:'✈️',color:'#D4820A',bg:'#FEF3E2',target:2000,saved:400,monthly:120,priority:2,deletable:false},
-    {id:'car',l:'Coche',e:'🚗',color:'#2B6CB0',bg:'#EBF4FF',target:8000,saved:800,monthly:200,priority:3,deletable:false},
+    {id:'emergency',l:'Fondo emergencia',e:'🛡️',color:'#2D9B6F',bg:'#E8F5EE',target:6000,saved:0,monthly:150,priority:1,deletable:false},
+    {id:'vacation',l:'Vacaciones',e:'✈️',color:'#D4820A',bg:'#FEF3E2',target:2000,saved:0,monthly:120,priority:2,deletable:false},
+    {id:'car',l:'Coche',e:'🚗',color:'#2B6CB0',bg:'#EBF4FF',target:8000,saved:0,monthly:200,priority:3,deletable:false},
   ],
-  snowballExtra:220,
+  snowballExtra:0,
   pendingDeleteGoalId:null,
 };
 
@@ -735,13 +724,15 @@ function renderModal(){
         <button class="tgl ${S.settings.survivorMode?'on':''}" id="csm" onclick="this.classList.toggle('on')"></button>
       </div>
       <div class="dvd"></div>
-      <div class="st">Conexión Cloudflare</div>
-      <div class="ig"><label class="lbl">Worker URL</label><input class="inp" id="curl" value="${S.workerUrl}" placeholder="https://...workers.dev"/></div>
-      <div class="ig"><label class="lbl">API Key</label><input class="inp" id="ckey" type="password" value="${S.apiKey}"/></div>
-      <div style="display:flex;gap:10px">
+      <div class="dvd"></div>
+      <div class="st">Conexión</div>
+      <div class="ig"><label class="lbl">Worker URL</label><input class="inp" id="curl" value="${S.workerUrl}" placeholder="https://...workers.dev" autocapitalize="none"/></div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Sesión activa como <b>${S.username}</b></div>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
         <button class="btn bol bfw" onclick="closeModal()">Cancelar</button>
         <button class="btn bdk bfw" onclick="saveSettings()">Guardar</button>
       </div>
+      <button class="btn bdg bfw bsm" onclick="closeModal();logout()">Cerrar sesión</button>
     </div></div>`;
   }
 
@@ -776,32 +767,139 @@ document.getElementById('content').addEventListener('scroll',function(){
 });
 
 // ═══════════════════════════════════════════════════════════
-// API — Capa de sincronización con Cloudflare Worker
+// API — Con autenticación por token de sesión
 // ═══════════════════════════════════════════════════════════
 
 function apiHeaders(){
-  return{'Content-Type':'application/json','X-API-Key':S.apiKey};
+  return{
+    'Content-Type':'application/json',
+    'Authorization':`Bearer ${S.token}`,
+  };
 }
 
 async function apiFetch(path,opts={}){
-  if(!S.workerUrl||!S.apiKey) throw new Error('no_config');
-  const res=await fetch(S.workerUrl+path,{...opts,headers:{...apiHeaders(),...(opts.headers||{})}});
+  if(!S.workerUrl) throw new Error('no_config');
+  const res=await fetch(S.workerUrl+path,{
+    ...opts,
+    headers:{...apiHeaders(),...(opts.headers||{})},
+  });
+  if(res.status===401) throw new Error('unauthorized');
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-// Muestra spinner en el topbar mientras carga
 function setLoading(on){
   const btn=document.getElementById('syncbtn');
   if(btn) btn.textContent=on?'⏳':'🔄';
 }
 
-// Carga todos los datos del Worker y actualiza S
-async function syncFromWorker(silent=false){
-  if(!S.workerUrl||!S.apiKey){
-    if(!silent) toast('⚙️ Configura el Worker en Ajustes');
+// ─── LOGIN ────────────────────────────────────────────────
+async function doLogin(username, password){
+  if(!S.workerUrl){
+    toast('⚙️ Configura la URL del Worker primero');
     return false;
   }
+  try{
+    const res=await fetch(S.workerUrl+'/auth/login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,password}),
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||'Error de login');
+    S.token=data.token;
+    S.username=data.username;
+    S.loggedIn=true;
+    localStorage.setItem('fs_token',S.token);
+    localStorage.setItem('fs_username',S.username);
+    return true;
+  }catch(e){
+    toast('❌ '+e.message);
+    return false;
+  }
+}
+
+async function doLogout(){
+  try{ await apiFetch('/auth/logout',{method:'POST'}); }catch{}
+  S.token=''; S.username=''; S.loggedIn=false;
+  S.expenses=[]; S.goals=[
+    {id:'emergency',l:'Fondo emergencia',e:'🛡️',color:'#2D9B6F',bg:'#E8F5EE',target:6000,saved:0,monthly:150,priority:1,deletable:false},
+    {id:'vacation',l:'Vacaciones',e:'✈️',color:'#D4820A',bg:'#FEF3E2',target:2000,saved:0,monthly:120,priority:2,deletable:false},
+    {id:'car',l:'Coche',e:'🚗',color:'#2B6CB0',bg:'#EBF4FF',target:8000,saved:0,monthly:200,priority:3,deletable:false},
+  ];
+  localStorage.removeItem('fs_token');
+  localStorage.removeItem('fs_username');
+  localStorage.removeItem('fs_expenses');
+  localStorage.removeItem('fs_goals');
+  localStorage.removeItem('fs_settings');
+  renderLogin();
+}
+
+// ─── PANTALLA LOGIN ───────────────────────────────────────
+function renderLogin(){
+  document.getElementById('bnav').style.display='none';
+  document.getElementById('topbar').style.display='none';
+  document.getElementById('ci').innerHTML=`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:100%;max-width:360px">
+      <div style="text-align:center;margin-bottom:36px">
+        <div style="font-family:var(--serif);font-size:32px;font-style:italic;margin-bottom:6px">FinanzasSmart</div>
+        <div style="font-size:14px;color:var(--text2)">Control inteligente de gastos</div>
+      </div>
+      <div class="card" style="padding:24px">
+        <div class="ig">
+          <label class="lbl">Usuario</label>
+          <input class="inp" id="li-user" placeholder="tu usuario" autocomplete="username" autocapitalize="none"/>
+        </div>
+        <div class="ig">
+          <label class="lbl">Contraseña</label>
+          <input class="inp" id="li-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <button class="btn bdk bfw" id="li-btn" onclick="handleLogin()" style="margin-top:4px">Entrar</button>
+      </div>
+      <div style="margin-top:16px">
+        <div class="ig">
+          <label class="lbl">Worker URL</label>
+          <input class="inp" id="li-url" value="${S.workerUrl}" placeholder="https://...workers.dev" autocapitalize="none"/>
+        </div>
+        <button class="btn bgh bfw bsm" onclick="saveWorkerUrl()">Guardar URL</button>
+      </div>
+    </div>
+  </div>`;
+
+  // Enter en password hace login
+  document.getElementById('li-pass')?.addEventListener('keydown',e=>{
+    if(e.key==='Enter') handleLogin();
+  });
+}
+
+window.saveWorkerUrl=()=>{
+  const url=document.getElementById('li-url')?.value?.trim();
+  if(!url) return;
+  S.workerUrl=url.replace(/\/$/,''); // quitar trailing slash
+  localStorage.setItem('worker_url',S.workerUrl);
+  toast('✓ URL guardada');
+};
+
+window.handleLogin=async()=>{
+  const btn=document.getElementById('li-btn');
+  const user=document.getElementById('li-user')?.value?.trim();
+  const pass=document.getElementById('li-pass')?.value;
+  if(!user||!pass){toast('Rellena usuario y contraseña');return;}
+  if(btn){btn.textContent='Entrando...';btn.disabled=true;}
+  const ok=await doLogin(user,pass);
+  if(ok){
+    document.getElementById('bnav').style.display='flex';
+    document.getElementById('topbar').style.display='flex';
+    await syncFromWorker(false);
+  } else {
+    if(btn){btn.textContent='Entrar';btn.disabled=false;}
+  }
+};
+
+// ─── SYNC ─────────────────────────────────────────────────
+async function syncFromWorker(silent=false){
+  if(!S.workerUrl||!S.token) return false;
   try{
     setLoading(true);
     const [expenses,goals,settings]=await Promise.all([
@@ -809,7 +907,6 @@ async function syncFromWorker(silent=false){
       apiFetch('/api/goals'),
       apiFetch('/api/settings'),
     ]);
-    // Mapear campos del Worker al formato interno de la PWA
     S.expenses=expenses.map(e=>({
       id:e.id,
       desc:e.description||e.desc||'Gasto',
@@ -831,21 +928,18 @@ async function syncFromWorker(silent=false){
       priority:g.priority||1,
       deletable:g.deletable!==false,
     }));
-    if(settings){
-      S.settings={...S.settings,...settings};
-    }
-    // Persistir en localStorage como caché offline
+    if(settings) S.settings={...S.settings,...settings};
     localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
     localStorage.setItem('fs_goals',JSON.stringify(S.goals));
     localStorage.setItem('fs_settings',JSON.stringify(S.settings));
-    localStorage.setItem('fs_last_sync',new Date().toISOString());
     if(!silent) toast('✓ Sincronizado');
     return true;
   }catch(e){
-    if(e.message==='no_config'){
-      if(!silent) toast('⚙️ Configura el Worker en Ajustes');
-    } else {
-      if(!silent) toast('⚠ Sin conexión — usando datos locales');
+    if(e.message==='unauthorized'){
+      toast('Sesión expirada — inicia sesión de nuevo');
+      doLogout();
+    } else if(!silent){
+      toast('⚠ Sin conexión — datos locales');
     }
     return false;
   }finally{
@@ -854,7 +948,6 @@ async function syncFromWorker(silent=false){
   }
 }
 
-// Carga caché local si existe (para arranque offline)
 function loadLocalCache(){
   try{
     const e=localStorage.getItem('fs_expenses');
@@ -866,7 +959,7 @@ function loadLocalCache(){
   }catch{}
 }
 
-// Añadir gasto → Worker + local
+// ─── ACCIONES CON API ─────────────────────────────────────
 window.submitExpense=async()=>{
   const desc=document.getElementById('md')?.value;
   const amt=parseFloat(document.getElementById('ma')?.value);
@@ -877,20 +970,14 @@ window.submitExpense=async()=>{
   const expense={id:gid(),desc,amount:amt,cat,date,fixed,src:'manual'};
   S.expenses.push(expense);
   closeModal();render();
-  // Intentar guardar en Worker
   try{
-    await apiFetch('/api/expenses',{
-      method:'POST',
-      body:JSON.stringify({description:desc,amount:amt,category:cat,date,fixed,source:'manual'}),
-    });
+    await apiFetch('/api/expenses',{method:'POST',
+      body:JSON.stringify({description:desc,amount:amt,category:cat,date,fixed,source:'manual'})});
     toast('✓ Gasto guardado');
-  }catch{
-    toast('✓ Guardado localmente (sin conexión)');
-  }
+  }catch{ toast('✓ Guardado localmente'); }
   localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
 };
 
-// Eliminar gasto → Worker + local
 window.deleteExpense=async id=>{
   S.expenses=S.expenses.filter(e=>e.id!==id);
   render();toast('Eliminado');
@@ -898,35 +985,32 @@ window.deleteExpense=async id=>{
   localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
 };
 
-// Añadir dinero a objetivo → Worker + local
+const saveGoals=async()=>{
+  try{
+    await apiFetch('/api/goals',{method:'POST',body:JSON.stringify(
+      S.goals.map(g=>({id:g.id,label:g.l,icon:g.e,color:g.color,bg:g.bg,
+        target:g.target,saved:g.saved,monthlyTarget:g.monthly,priority:g.priority,deletable:g.deletable}))
+    )});
+  }catch{}
+  localStorage.setItem('fs_goals',JSON.stringify(S.goals));
+};
+
 window.addToGoal=async id=>{
   const inp=document.getElementById(`gi-${id}`);
   const amt=parseFloat(inp?.value)||0;
   if(!amt) return;
   S.goals=S.goals.map(g=>g.id===id?{...g,saved:Math.min(g.saved+amt,g.target)}:g);
   inp.value='';render();toast(`✓ ${fmt(amt)} añadidos`);
-  try{
-    await apiFetch('/api/goals',{method:'POST',body:JSON.stringify(
-      S.goals.map(g=>({id:g.id,label:g.l,icon:g.e,color:g.color,bg:g.bg,target:g.target,saved:g.saved,monthlyTarget:g.monthly,priority:g.priority,deletable:g.deletable}))
-    )});
-  }catch{}
-  localStorage.setItem('fs_goals',JSON.stringify(S.goals));
+  await saveGoals();
 };
 
-// Eliminar objetivo → Worker + local
 window.deleteGoal=id=>{S.pendingDeleteGoalId=id;S.modal='delGoal';renderModal();};
 window.confirmDelGoal=async()=>{
   if(S.pendingDeleteGoalId) S.goals=S.goals.filter(g=>g.id!==S.pendingDeleteGoalId);
   S.pendingDeleteGoalId=null;closeModal();toast('Objetivo eliminado');render();
-  try{
-    await apiFetch('/api/goals',{method:'POST',body:JSON.stringify(
-      S.goals.map(g=>({id:g.id,label:g.l,icon:g.e,color:g.color,bg:g.bg,target:g.target,saved:g.saved,monthlyTarget:g.monthly,priority:g.priority,deletable:g.deletable}))
-    )});
-  }catch{}
-  localStorage.setItem('fs_goals',JSON.stringify(S.goals));
+  await saveGoals();
 };
 
-// Crear objetivo → Worker + local
 window.submitGoal=async()=>{
   const label=document.getElementById('gn')?.value;
   const icon=document.getElementById('gi')?.value||'🎯';
@@ -936,39 +1020,29 @@ window.submitGoal=async()=>{
   const cs=['#2D9B6F','#D4820A','#2B6CB0','#9B2D7A'];
   const bs=['#E8F5EE','#FEF3E2','#EBF4FF','#F9E8F5'];
   const ci=S.goals.length%4;
-  S.goals.push({id:gid(),l:label,e:icon,color:cs[ci],bg:bs[ci],target,saved:0,monthly,priority:S.goals.length+1,deletable:true});
+  S.goals.push({id:gid(),l:label,e:icon,color:cs[ci],bg:bs[ci],target,saved:0,monthly,
+    priority:S.goals.length+1,deletable:true});
   closeModal();toast('✓ Objetivo creado');render();
-  try{
-    await apiFetch('/api/goals',{method:'POST',body:JSON.stringify(
-      S.goals.map(g=>({id:g.id,label:g.l,icon:g.e,color:g.color,bg:g.bg,target:g.target,saved:g.saved,monthlyTarget:g.monthly,priority:g.priority,deletable:g.deletable}))
-    )});
-  }catch{}
-  localStorage.setItem('fs_goals',JSON.stringify(S.goals));
+  await saveGoals();
 };
 
-// Guardar ajustes → Worker + local
 window.saveSettings=async()=>{
   S.settings.payDay=parseInt(document.getElementById('cpd')?.value)||25;
   S.settings.ipcRate=parseFloat(document.getElementById('cipc')?.value)||3.2;
   S.settings.savingsRate=parseInt(document.getElementById('csv')?.value)||10;
   S.settings.survivorMode=document.getElementById('csm')?.classList.contains('on');
-  S.workerUrl=document.getElementById('curl')?.value||'';
-  S.apiKey=document.getElementById('ckey')?.value||'';
-  if(S.workerUrl) localStorage.setItem('worker_url',S.workerUrl);
-  if(S.apiKey) localStorage.setItem('api_key',S.apiKey);
+  const newUrl=(document.getElementById('curl')?.value||'').trim().replace(/\/$/,'');
+  if(newUrl&&newUrl!==S.workerUrl){
+    S.workerUrl=newUrl;
+    localStorage.setItem('worker_url',S.workerUrl);
+  }
   closeModal();toast('✓ Ajustes guardados');render();
   try{
     await apiFetch('/api/settings',{method:'POST',body:JSON.stringify(S.settings)});
   }catch{}
   localStorage.setItem('fs_settings',JSON.stringify(S.settings));
-  // Si acaba de configurar Worker, sincronizar
-  if(S.workerUrl&&S.apiKey) syncFromWorker(true);
 };
 
-// Sync manual desde botón topbar
-window.manualSync=()=>syncFromWorker(false);
-
-// CSV import → local + Worker en background
 window.handleCSV=input=>{
   const file=input.files[0];if(!file) return;
   const r=new FileReader();
@@ -987,7 +1061,6 @@ window.handleCSV=input=>{
     if(!n){toast('Sin gastos válidos');return;}
     toast(`✓ ${n} gastos importados`);render();
     localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
-    // Subir al Worker en background
     for(const exp of newExps){
       try{
         await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
@@ -999,28 +1072,38 @@ window.handleCSV=input=>{
   r.readAsText(file);input.value='';
 };
 
-// Añadir botón sync al topbar
+window.manualSync=()=>syncFromWorker(false);
+window.logout=()=>doLogout();
+
+// Añadir botón sync y logout al topbar
 document.querySelector('.tbar-title').insertAdjacentHTML('afterend',
   `<button id="syncbtn" class="icon-btn" onclick="manualSync()" title="Sincronizar" style="margin-right:4px">🔄</button>`
 );
+// Añadir logout en ajustes — se hace desde el modal de settings
 
-// Auto-sync cada 5 minutos si hay conexión
-setInterval(()=>syncFromWorker(true),5*60*1000);
-
-// Visibilidad: sincronizar al volver a la app
+// Auto-sync cada 5 min
+setInterval(()=>{ if(S.loggedIn) syncFromWorker(true); },5*60*1000);
 document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden) syncFromWorker(true);
+  if(!document.hidden&&S.loggedIn) syncFromWorker(true);
 });
 
-// ── ARRANQUE ───────────────────────────────────────────────
-// 1. Cargar caché local para arranque instantáneo
+// ─── ARRANQUE ─────────────────────────────────────────────
 loadLocalCache();
-render();
-// 2. Sincronizar con Worker en background
-syncFromWorker(true);
+
+if(S.token&&S.workerUrl){
+  // Tiene sesión guardada — intentar restaurar
+  S.loggedIn=true;
+  document.getElementById('bnav').style.display='flex';
+  document.getElementById('topbar').style.display='flex';
+  render();
+  syncFromWorker(true);
+} else {
+  // Sin sesión — mostrar login
+  renderLogin();
+}
 
 if('serviceWorker' in navigator){
-  const sw=`const C='fsv4';self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(['/']))));self.addEventListener('fetch',e=>{if(e.request.url.includes('workers.dev'))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const sw=`const C='fsv4';self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(['/finanzas-smart/']))));self.addEventListener('fetch',e=>{if(e.request.url.includes('workers.dev'))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
 }
 </script>
