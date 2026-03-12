@@ -820,6 +820,29 @@ function renderModal(){
     </div></div>`;
   }
 
+  if(S.modal==='confirmIncome'){
+    const c=S._pendingIncomeCandidate;
+    if(!c){closeModal();return;}
+    const months=incomeMonthsForPayday(c.date);
+    const mNames=months.map(m=>MONTHS[parseInt(m.slice(5))-1]).join(' y ');
+    div.innerHTML=`<div class="mdbg"><div class="mds" onclick="event.stopPropagation()">
+      <div class="mdh"></div>
+      <div class="mdt">💰 ¿Es tu nómina?</div>
+      <div style="background:var(--green-bg);border-radius:12px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:4px">INGRESO DETECTADO</div>
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${fmt(c.amount)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">${c.date} · ${c.desc.slice(0,60)}</div>
+      </div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+        Cobrado el día ${c.date.slice(8)} → se asignará como ingreso de <b>${mNames}</b>
+      </p>
+      <div style="display:flex;gap:10px">
+        <button class="btn bol bfw" onclick="confirmIncome(false)">No es nómina</button>
+        <button class="btn bdk bfw" onclick="confirmIncome(true)">✓ Sí, es mi nómina</button>
+      </div>
+    </div></div>`;
+  }
+
   if(S.modal==='delGoal'){
     div.innerHTML=`<div class="mdbg" onclick="closeModal()"><div class="mds" onclick="event.stopPropagation()">
       <div class="mdh"></div><div class="mdt">¿Eliminar objetivo?</div>
@@ -835,6 +858,83 @@ function renderModal(){
 }
 
 
+
+// ── DETECCIÓN DE NÓMINAS ───────────────────────────────────
+// Cobras el día 25 → esa paga cubre del 25 de ese mes al 24 del siguiente
+// Ejemplo: cobras 25/02 → cubre Feb (25-28) y Marzo completo
+
+function incomeMonthsForPayday(dateStr){
+  // dateStr: YYYY-MM-DD, cobro el día 25
+  const d=new Date(dateStr+'T12:00:00');
+  const day=d.getDate();
+  const payDay=S.settings.payDay||25;
+  const months=[];
+  if(day>=payDay){
+    // Cobrado en este mes → aplica a este mes Y al siguiente
+    months.push(dateStr.slice(0,7)); // este mes
+    const next=new Date(d.getFullYear(),d.getMonth()+1,1);
+    months.push(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
+  } else {
+    // Cobrado antes del día 25 → aplica solo al mes anterior y este
+    const prev=new Date(d.getFullYear(),d.getMonth()-1,1);
+    months.push(`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`);
+    months.push(dateStr.slice(0,7));
+  }
+  return months;
+}
+
+let _incomeCandidates=[];
+let _incomeIdx=0;
+
+function checkUnassignedIncomes(candidates){
+  if(!candidates||!candidates.length) return;
+  // Filtrar solo los que no tienen ingreso ya asignado
+  _incomeCandidates=candidates.filter(c=>{
+    const months=incomeMonthsForPayday(c.date);
+    return months.some(m=>!S.incomes[m]);
+  });
+  _incomeIdx=0;
+  if(_incomeCandidates.length) showNextIncomeCandidate();
+}
+
+function showNextIncomeCandidate(){
+  if(_incomeIdx>=_incomeCandidates.length) return;
+  const c=_incomeCandidates[_incomeIdx];
+  S.modal='confirmIncome';
+  S._pendingIncomeCandidate=c;
+  renderModal();
+}
+
+window.confirmIncome=async(yes)=>{
+  const c=S._pendingIncomeCandidate;
+  if(yes&&c){
+    const months=incomeMonthsForPayday(c.date);
+    months.forEach(m=>{
+      if(!S.incomes[m]){
+        S.incomes[m]=c.amount;
+      }
+    });
+    // Actualizar lastYearIncomes para proyecciones
+    months.forEach(m=>{
+      const mi=parseInt(m.slice(5))-1;
+      S.settings.lastYearIncomes[mi]=Math.round(c.amount/(1+S.settings.ipcRate/100));
+    });
+    localStorage.setItem('fs_incomes',JSON.stringify(S.incomes));
+    localStorage.setItem('fs_settings',JSON.stringify(S.settings));
+    toast(`✓ Nómina de ${fmt(c.amount)} asignada`);
+    try{
+      for(const m of months){
+        await apiFetch('/api/incomes',{method:'POST',body:JSON.stringify({month:m,amount:c.amount})});
+      }
+    }catch{}
+    render();
+  }
+  closeModal();
+  _incomeIdx++;
+  if(_incomeIdx<_incomeCandidates.length){
+    setTimeout(showNextIncomeCandidate,300);
+  }
+};
 // ── EDITAR GASTO ───────────────────────────────────────────
 window.openEditExpense=id=>{
   S.pendingEditExpenseId=id;
