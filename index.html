@@ -1375,14 +1375,16 @@ window.handleCSV=input=>{
     S.expenses.push(...unique);
     n=unique.length;
 
-    if(!n){
-      toast(`❌ Sin gastos. ${skipped} filas saltadas (ingresos o formato). Primer importe: "${lines[headerIdx+1]?parseCSVLine(lines[headerIdx+1])[iAmount]:'vacío'}"`);
-      return;
+    if(n>0){
+      toast(`✓ ${n} gastos importados (${skipped} ingresos ignorados)`);
+      render();
+      localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
+      await uploadExpenses(newExps);
+    } else {
+      toast(`ℹ️ Sin gastos nuevos`);
     }
-    toast(`✓ ${n} gastos importados (${skipped} ingresos ignorados)`);
-    render();
-    localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
-    await uploadExpenses(newExps);
+    // Detectar nóminas siempre, aunque no haya gastos nuevos
+    if(csvCandidates.length) setTimeout(()=>checkUnassignedIncomes(csvCandidates),600);
   };
   r.readAsText(file,'UTF-8');
   input.value='';
