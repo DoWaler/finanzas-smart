@@ -1398,11 +1398,13 @@ window.handleCSV=input=>{
       const rawAmt=cols[iAmount]||'';
       if(!rawDate||!desc) continue;
 
-      // Limpiar importe: − Unicode (U+2212) y formato español
+      // Limpiar importe: quitar comillas, guiones unicode, puntos de miles
       const amtClean=rawAmt
-        .replace(/[‐‑‒–—―−﹘﹣－]/g,'-')
+        .replace(/['"]/g,'')
+        .replace(/[‐‑‒–—―−﹘﹣－−]/g,'-')
+        .replace(/\.(?=\d{3}[,.])/g,'')  // punto de miles: 2.485,22 → 2485,22
+        .replace(/\.(?=\d{3}$)/g,'')     // punto de miles al final: 2.485
         .replace(/[^0-9,.-]/g,'')
-        .replace(/\.(?=\d{3}[,.])/g,'')
         .replace(',','.');
       const amt=parseFloat(amtClean);
 
