@@ -156,7 +156,7 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
 <script>
 const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const MS=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const YR=2026;
+// S.year es dinámico — se lee de S.year
 const CATS=[
   {id:"housing",l:"Vivienda",e:"🏠",type:"need",c:"#6366f1",bg:"#EEF0FE"},
   {id:"food",l:"Alimentación",e:"🛒",type:"need",c:"#D4820A",bg:"#FEF3E2"},
@@ -171,7 +171,7 @@ const CATS=[
 ];
 
 const S={
-  view:'home', month:new Date().getMonth(), theme:localStorage.getItem('theme')||'light', modal:null,
+  view:'home', month:new Date().getMonth(), year:new Date().getFullYear(), theme:localStorage.getItem('theme')||'light', modal:null,
   workerUrl:localStorage.getItem('worker_url')||'',
   token:localStorage.getItem('fs_token')||'',
   username:localStorage.getItem('fs_username')||'',
@@ -212,8 +212,9 @@ function getBudget(mi){
   return{income,avg,goalTotal,savingsAmt,free,needs:Math.round(free*.625),wants:Math.round(free*.375),proj,isFat:income>avg*1.5};
 }
 
-function mExp(mi){
-  const pfx=`${YR}-${String(mi+1).padStart(2,'0')}`;
+function mExp(mi,yr){
+  const y=yr||S.year;
+  const pfx=`${y}-${String(mi+1).padStart(2,'0')}`;
   return S.expenses.filter(e=>e.date&&e.date.startsWith(pfx));
 }
 
@@ -299,7 +300,15 @@ function renderNav(){
 
 function pillsHtml(){
   const b=getBudget(S.month);
-  return`<div class="mpills">${MS.map((m,i)=>{
+  // Detectar años disponibles en los gastos
+  const years=[...new Set(S.expenses.map(e=>e.date&&e.date.slice(0,4)).filter(Boolean))].sort().reverse();
+  const curYear=new Date().getFullYear();
+  if(!years.includes(String(curYear))) years.unshift(String(curYear));
+  const yearSel=years.length>1?`<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+    <span style="font-size:12px;color:var(--text3);font-weight:700">AÑO</span>
+    ${years.map(y=>`<button class="mpill ${String(S.year)===y?'active':''}" onclick="setYear(${y})" style="min-width:52px">${y}</button>`).join('')}
+  </div>`:'';
+  return yearSel+`<div class="mpills">${MS.map((m,i)=>{
     const fat=b.proj[i]>b.avg*1.5;
     return`<button class="mpill ${i===S.month?'active':''} ${fat&&i!==S.month?'fat':''}" onclick="setMonth(${i})">${m}${fat?' 💰':''}</button>`;
   }).join('')}</div>`;
@@ -343,7 +352,7 @@ function rHome(){
     </div>`:''}
 
     <div class="bcard fu1">
-      <div style="font-size:11px;opacity:.6;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.8px">${MONTHS[S.month]} ${YR} ${b.isFat?'· 💰 Mes gordo':''}</div>
+      <div style="font-size:11px;opacity:.6;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.8px">${MONTHS[S.month]} ${S.year} ${b.isFat?'· 💰 Mes gordo':''}</div>
       <div style="font-size:13px;opacity:.65;margin-bottom:4px">Dinero realmente libre</div>
       <div style="font-size:34px;font-weight:800;letter-spacing:-1px;margin-bottom:16px">${fmt(Math.max(reallyFree,0))}</div>
       <div style="display:flex;gap:12px;position:relative;z-index:1">
@@ -557,7 +566,7 @@ function rAnalisis(){
     </div>
 
     <div class="card fu">
-      <div class="st">💰 Ahorro acumulado ${YR}</div>
+      <div class="st">💰 Ahorro acumulado ${S.year}</div>
       <div style="display:flex;align-items:flex-end;gap:5px;height:80px;margin-bottom:8px">
         ${cumSav.map((v,i)=>{
           const h=Math.max(v/maxCum*70,3);
@@ -753,6 +762,7 @@ function renderModal(){
 // ── ACTIONS BÁSICAS ────────────────────────────────────────
 window.setView=v=>{S.view=v;render();};
 window.setMonth=i=>{S.month=i;render();};
+window.setYear=y=>{S.year=y;render();};
 
 document.getElementById('thbtn').onclick=()=>{
   S.theme=S.theme==='light'?'dark':'light';
@@ -1100,13 +1110,21 @@ async function parseXlsx(file){
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
 
+  // Santander exporta con apóstrofe delante — limpiar todas las celdas
+  const cleanCell=c=>{
+    if(c===null||c===undefined) return '';
+    const s=String(c).trim();
+    return s.startsWith("'")?s.slice(1):s;
+  };
+  const cleanRows=rows.map(r=>r.map(cleanCell));
+
   // Buscar la fila de cabecera (la que tiene "Fecha operación" o "Concepto")
-  let headerIdx=rows.findIndex(r=>
-    r.some(c=>String(c).toLowerCase().includes('fecha operaci'))
+  let headerIdx=cleanRows.findIndex(r=>
+    r.some(c=>c.toLowerCase().includes('fecha operaci'))
   );
   if(headerIdx<0) headerIdx=6; // fallback: fila 7 (índice 6)
 
-  const header=rows[headerIdx].map(c=>String(c).toLowerCase().trim());
+  const header=cleanRows[headerIdx].map(c=>c.toLowerCase().trim());
   const iDate  =header.findIndex(c=>c.includes('fecha op'));
   const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
   const iAmount=header.findIndex(c=>c.includes('importe'));
@@ -1116,8 +1134,8 @@ async function parseXlsx(file){
   }
 
   const newExps=[];let n=0;
-  for(let i=headerIdx+1;i<rows.length;i++){
-    const row=rows[i];
+  for(let i=headerIdx+1;i<cleanRows.length;i++){
+    const row=cleanRows[i];
     if(!row||!row[iDate]) continue;
     const rawAmt=cleanAmount(row[iAmount]);
     if(isNaN(rawAmt)||rawAmt>=0) continue; // solo gastos
