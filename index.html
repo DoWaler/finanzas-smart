@@ -1053,29 +1053,87 @@ window.saveSettings=async()=>{
   localStorage.setItem('fs_settings',JSON.stringify(S.settings));
 };
 
+// Parsea CSV con campos entrecomillados (RFC 4180)
+function parseCSVLine(line){
+  const cols=[];let cur='';let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){cols.push(cur.trim());cur='';}
+    else{cur+=c;}
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
 window.handleCSV=input=>{
   const file=input.files[0];if(!file) return;
   const isXlsx=file.name.endsWith('.xlsx')||file.name.endsWith('.xls');
   if(isXlsx){ parseXlsx(file); input.value=''; return; }
-  // CSV fallback
   const r=new FileReader();
   r.onload=async ev=>{
-    const lines=ev.target.result.split('\n').filter(Boolean);let n=0;
-    const newExps=[];
-    lines.slice(1).forEach(line=>{
-      const cols=line.split(/[;,]/).map(c=>c.trim().replace(/"/g,''));
-      if(cols.length<3) return;
-      const [date,desc,ar]=cols;const amt=parseFloat(ar.replace(',','.'));
-      if(!isNaN(amt)&&amt<0){
-        const exp={id:gid(),desc,amount:Math.abs(amt),cat:guessCategory(desc),date:normalizeDate(date),fixed:false,src:'csv'};
-        S.expenses.push(exp);newExps.push(exp);n++;
-      }
-    });
-    if(!n){toast('Sin gastos válidos');return;}
-    toast(`✓ ${n} gastos importados`);render();
+    toast('⏳ Leyendo CSV...');
+    // Limpiar caracteres Windows (\r)
+    const raw=ev.target.result.replace(/\r/g,'');
+    const lines=raw.split('\n').filter(l=>l.trim());
+
+    // Buscar la línea de cabecera (contiene "Fecha" y "Concepto")
+    let headerIdx=lines.findIndex(l=>
+      l.toLowerCase().includes('fecha') && l.toLowerCase().includes('concepto')
+    );
+    if(headerIdx<0){ toast('❌ No se encontró cabecera en el CSV'); return; }
+    toast(`⏳ Cabecera en línea ${headerIdx+1}, procesando ${lines.length-headerIdx-1} filas...`);
+
+    const header=parseCSVLine(lines[headerIdx]).map(c=>c.toLowerCase().trim());
+    const iDate  =header.findIndex(c=>c.includes('fecha op'));
+    const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
+    const iAmount=header.findIndex(c=>c.includes('importe'));
+
+    if(iDate<0||iDesc<0||iAmount<0){
+      toast(`❌ Columnas no encontradas: ${header.join(' | ')}`);return;
+    }
+
+    const newExps=[];let n=0;let skipped=0;
+    for(let i=headerIdx+1;i<lines.length;i++){
+      const cols=parseCSVLine(lines[i]);
+      if(cols.length<4) continue;
+      const rawDate=cols[iDate]||'';
+      const desc=(cols[iDesc]||'').trim();
+      const rawAmt=cols[iAmount]||'';
+      if(!rawDate||!desc) continue;
+
+      // Limpiar importe: − Unicode (U+2212) y formato español
+      const amtClean=rawAmt
+        .replace(/\u2212/g,'-')
+        .replace(/−/g,'-')
+        .replace(/[^0-9,.-]/g,'')
+        .replace(/\.(?=\d{3})/g,'')  // quitar puntos de miles
+        .replace(',','.');
+      const amt=parseFloat(amtClean);
+      if(isNaN(amt)||amt>=0){skipped++;continue;}
+
+      newExps.push({
+        id:gid(),desc,
+        amount:Math.abs(amt),
+        cat:guessCategory(desc),
+        date:normalizeDate(rawDate),
+        fixed:false,src:'santander_csv',
+      });
+      n++;
+    }
+    S.expenses.push(...newExps);
+
+    if(!n){
+      toast(`❌ Sin gastos. ${skipped} filas saltadas (ingresos o formato). Primer importe: "${lines[headerIdx+1]?parseCSVLine(lines[headerIdx+1])[iAmount]:'vacío'}"`);
+      return;
+    }
+    toast(`✓ ${n} gastos importados (${skipped} ingresos ignorados)`);
+    render();
+    localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
     await uploadExpenses(newExps);
   };
-  r.readAsText(file,input.value='');
+  r.readAsText(file,'UTF-8');
+  input.value='';
 };
 
 // Normaliza DD/MM/YYYY → YYYY-MM-DD
@@ -1098,7 +1156,6 @@ function cleanAmount(raw){
 async function parseXlsx(file){
   toast('⏳ Cargando Excel...');
   try{
-    // Cargar SheetJS dinámicamente
     if(!window.XLSX){
       toast('⏳ Descargando librería...');
       await new Promise((res,rej)=>{
@@ -1116,39 +1173,39 @@ async function parseXlsx(file){
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     toast(`⏳ ${rows.length} filas encontradas...`);
 
-    // Santander exporta con apóstrofe delante — limpiar todas las celdas
+    // Limpiar apóstrofe que Santander pone delante de cada celda
     const cleanCell=c=>{
       if(c===null||c===undefined) return '';
+      if(c instanceof Date) return c;
       const s=String(c).trim();
       return s.startsWith("'")?s.slice(1):s;
     };
-    const cleanRows=rows.map(r=>r.map(cleanCell));
+    const cleanRows=rows.map(r=>Array.isArray(r)?r.map(cleanCell):[]);
 
-    // Buscar la fila de cabecera
+    // Buscar cabecera — línea que contiene "fecha" y "concepto"
     let headerIdx=cleanRows.findIndex(r=>
-      r.some(c=>c.toLowerCase().includes('fecha operaci'))
+      r.some(c=>String(c).toLowerCase().includes('fecha')) &&
+      r.some(c=>String(c).toLowerCase().includes('concepto'))
     );
     if(headerIdx<0) headerIdx=6;
     toast(`⏳ Cabecera en fila ${headerIdx+1}...`);
 
-    const header=cleanRows[headerIdx].map(c=>c.toLowerCase().trim());
+    const header=cleanRows[headerIdx].map(c=>String(c).toLowerCase().trim());
     const iDate  =header.findIndex(c=>c.includes('fecha op'));
     const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
     const iAmount=header.findIndex(c=>c.includes('importe'));
 
     if(iDate<0||iDesc<0||iAmount<0){
-      toast(`❌ Columnas no encontradas. Cabecera: ${header.join(' | ')}`);
+      toast(`❌ Columnas no encontradas: [${header.join(' | ')}]`);
       return;
     }
-    toast(`⏳ Columnas OK: fecha=${iDate} desc=${iDesc} importe=${iAmount}`);
 
     const newExps=[];let n=0;let skipped=0;
     for(let i=headerIdx+1;i<cleanRows.length;i++){
       const row=cleanRows[i];
       if(!row||!row[iDate]) continue;
-      const rawAmt=cleanAmount(row[iAmount]);
-      if(isNaN(rawAmt)||rawAmt>=0){skipped++;continue;}
 
+      // Fecha
       let dateStr='';
       const rawDate=row[iDate];
       if(rawDate instanceof Date){
@@ -1156,20 +1213,31 @@ async function parseXlsx(file){
       } else {
         dateStr=normalizeDate(String(rawDate));
       }
+      if(!dateStr) continue;
 
-      const desc=String(row[iDesc]).trim()||'Gasto';
-      const exp={
+      // Importe — limpia U+2212, puntos de miles, coma decimal
+      const rawAmt=String(row[iAmount]||'')
+        .replace(/−/g,'-')
+        .replace(/[^0-9,.\-]/g,'')
+        .replace(/\.(?=\d{3})/g,'')
+        .replace(',','.');
+      const amt=parseFloat(rawAmt);
+      if(isNaN(amt)||amt>=0){skipped++;continue;}
+
+      const desc=String(row[iDesc]||'').trim()||'Gasto';
+      newExps.push({
         id:gid(),desc,
-        amount:Math.abs(rawAmt),
+        amount:Math.abs(amt),
         cat:guessCategory(desc),
         date:dateStr,fixed:false,
         src:'santander_xlsx',
-      };
-      S.expenses.push(exp);newExps.push(exp);n++;
+      });
+      n++;
     }
 
+    S.expenses.push(...newExps);
     if(!n){
-      toast(`❌ Sin gastos. Saltadas: ${skipped} filas. Primer importe raw: ${cleanRows[headerIdx+1]?.[iAmount]}`);
+      toast(`❌ Sin gastos. ${skipped} filas saltadas. Muestra importe: "${cleanRows[headerIdx+1]?.[iAmount]}"`);
       return;
     }
     toast(`✓ ${n} gastos importados (${skipped} ingresos ignorados)`);
@@ -1178,7 +1246,7 @@ async function parseXlsx(file){
     await uploadExpenses(newExps);
 
   }catch(e){
-    toast('❌ Error: '+e.message);
+    toast('❌ Error xlsx: '+e.message);
   }
 }
 
