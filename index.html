@@ -1096,76 +1096,90 @@ function cleanAmount(raw){
 }
 
 async function parseXlsx(file){
-  // Cargar SheetJS dinámicamente
-  if(!window.XLSX){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=res;s.onerror=rej;
-      document.head.appendChild(s);
-    });
-  }
-  const buf=await file.arrayBuffer();
-  const wb=XLSX.read(buf,{type:'array',cellDates:true});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  toast('⏳ Cargando Excel...');
+  try{
+    // Cargar SheetJS dinámicamente
+    if(!window.XLSX){
+      toast('⏳ Descargando librería...');
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res;
+        s.onerror=()=>rej(new Error('No se pudo cargar SheetJS'));
+        document.head.appendChild(s);
+      });
+    }
+    toast('⏳ Leyendo archivo...');
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    toast(`⏳ ${rows.length} filas encontradas...`);
 
-  // Santander exporta con apóstrofe delante — limpiar todas las celdas
-  const cleanCell=c=>{
-    if(c===null||c===undefined) return '';
-    const s=String(c).trim();
-    return s.startsWith("'")?s.slice(1):s;
-  };
-  const cleanRows=rows.map(r=>r.map(cleanCell));
+    // Santander exporta con apóstrofe delante — limpiar todas las celdas
+    const cleanCell=c=>{
+      if(c===null||c===undefined) return '';
+      const s=String(c).trim();
+      return s.startsWith("'")?s.slice(1):s;
+    };
+    const cleanRows=rows.map(r=>r.map(cleanCell));
 
-  // Buscar la fila de cabecera (la que tiene "Fecha operación" o "Concepto")
-  let headerIdx=cleanRows.findIndex(r=>
-    r.some(c=>c.toLowerCase().includes('fecha operaci'))
-  );
-  if(headerIdx<0) headerIdx=6; // fallback: fila 7 (índice 6)
+    // Buscar la fila de cabecera
+    let headerIdx=cleanRows.findIndex(r=>
+      r.some(c=>c.toLowerCase().includes('fecha operaci'))
+    );
+    if(headerIdx<0) headerIdx=6;
+    toast(`⏳ Cabecera en fila ${headerIdx+1}...`);
 
-  const header=cleanRows[headerIdx].map(c=>c.toLowerCase().trim());
-  const iDate  =header.findIndex(c=>c.includes('fecha op'));
-  const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
-  const iAmount=header.findIndex(c=>c.includes('importe'));
+    const header=cleanRows[headerIdx].map(c=>c.toLowerCase().trim());
+    const iDate  =header.findIndex(c=>c.includes('fecha op'));
+    const iDesc  =header.findIndex(c=>c.includes('concepto')||c.includes('descripci'));
+    const iAmount=header.findIndex(c=>c.includes('importe'));
 
-  if(iDate<0||iDesc<0||iAmount<0){
-    toast('❌ Formato no reconocido');return;
-  }
+    if(iDate<0||iDesc<0||iAmount<0){
+      toast(`❌ Columnas no encontradas. Cabecera: ${header.join(' | ')}`);
+      return;
+    }
+    toast(`⏳ Columnas OK: fecha=${iDate} desc=${iDesc} importe=${iAmount}`);
 
-  const newExps=[];let n=0;
-  for(let i=headerIdx+1;i<cleanRows.length;i++){
-    const row=cleanRows[i];
-    if(!row||!row[iDate]) continue;
-    const rawAmt=cleanAmount(row[iAmount]);
-    if(isNaN(rawAmt)||rawAmt>=0) continue; // solo gastos
+    const newExps=[];let n=0;let skipped=0;
+    for(let i=headerIdx+1;i<cleanRows.length;i++){
+      const row=cleanRows[i];
+      if(!row||!row[iDate]) continue;
+      const rawAmt=cleanAmount(row[iAmount]);
+      if(isNaN(rawAmt)||rawAmt>=0){skipped++;continue;}
 
-    // Fecha: puede venir como string DD/MM/YYYY o como Date
-    let dateStr='';
-    const rawDate=row[iDate];
-    if(rawDate instanceof Date){
-      dateStr=rawDate.toISOString().slice(0,10);
-    } else {
-      dateStr=normalizeDate(String(rawDate));
+      let dateStr='';
+      const rawDate=row[iDate];
+      if(rawDate instanceof Date){
+        dateStr=rawDate.toISOString().slice(0,10);
+      } else {
+        dateStr=normalizeDate(String(rawDate));
+      }
+
+      const desc=String(row[iDesc]).trim()||'Gasto';
+      const exp={
+        id:gid(),desc,
+        amount:Math.abs(rawAmt),
+        cat:guessCategory(desc),
+        date:dateStr,fixed:false,
+        src:'santander_xlsx',
+      };
+      S.expenses.push(exp);newExps.push(exp);n++;
     }
 
-    const desc=String(row[iDesc]).trim()||'Gasto';
-    const exp={
-      id:gid(),
-      desc,
-      amount:Math.abs(rawAmt),
-      cat:guessCategory(desc),
-      date:dateStr,
-      fixed:false,
-      src:'santander_xlsx',
-    };
-    S.expenses.push(exp);newExps.push(exp);n++;
-  }
+    if(!n){
+      toast(`❌ Sin gastos. Saltadas: ${skipped} filas. Primer importe raw: ${cleanRows[headerIdx+1]?.[iAmount]}`);
+      return;
+    }
+    toast(`✓ ${n} gastos importados (${skipped} ingresos ignorados)`);
+    render();
+    localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
+    await uploadExpenses(newExps);
 
-  if(!n){toast('Sin gastos válidos en el archivo');return;}
-  toast(`✓ ${n} gastos importados`);render();
-  localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
-  await uploadExpenses(newExps);
+  }catch(e){
+    toast('❌ Error: '+e.message);
+  }
 }
 
 async function uploadExpenses(exps){
