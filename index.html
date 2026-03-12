@@ -187,6 +187,8 @@ const S={
   ],
   snowballExtra:0,
   pendingDeleteGoalId:null,
+  incomes:{},  // {"2026-03": 1400, "2026-02": 4200, ...}
+  pendingEditExpenseId:null,
 };
 
 document.documentElement.setAttribute('data-theme',S.theme);
@@ -202,9 +204,24 @@ function toast(msg){
   clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity='0',2800);
 }
 
+
+// ── INGRESOS ───────────────────────────────────────────────
+function getMonthKey(yr,mi){ return `${yr}-${String(mi+1).padStart(2,'0')}`; }
+function getIncome(yr,mi){
+  const key=getMonthKey(yr,mi);
+  // 1. Ingreso manual guardado
+  if(S.incomes[key]) return S.incomes[key];
+  // 2. Detectar nómina en los gastos (importes positivos marcados como ingreso)
+  const pfx=key;
+  const nomina=S.expenses.filter(e=>e.date&&e.date.startsWith(pfx)&&e.isIncome);
+  if(nomina.length) return nomina.reduce((s,e)=>s+e.amount,0);
+  // 3. Proyección del año anterior con IPC
+  const proj=S.settings.lastYearIncomes.map(v=>Math.round(v*(1+S.settings.ipcRate/100)));
+  return proj[mi]||0;
+}
 function getBudget(mi){
   const proj=S.settings.lastYearIncomes.map(v=>Math.round(v*(1+S.settings.ipcRate/100)));
-  const income=proj[mi]||0;
+  const income=getIncome(S.year,mi);
   const avg=Math.round(proj.reduce((a,b)=>a+b,0)/12);
   const goalTotal=S.goals.reduce((s,g)=>s+g.monthly,0);
   const savingsAmt=Math.round(income*S.settings.savingsRate/100);
@@ -474,6 +491,18 @@ function rGastos(){
     <div class="ps fu">${exps.length} transacciones · ${fmtD(total)}</div>
     ${pillsHtml()}
 
+    <!-- Ingreso del mes -->
+    <div class="card fu" style="border-left:3px solid var(--green)">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="lbl">Ingreso ${MONTHS[S.month]} ${S.year}</div>
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${fmt(getIncome(S.year,S.month))}</div>
+          ${S.incomes[getMonthKey(S.year,S.month)]?'<div style="font-size:11px;color:var(--green)">✓ Introducido manualmente</div>':S.expenses.filter(e=>e.date&&e.date.startsWith(getMonthKey(S.year,S.month))&&e.isIncome).length?'<div style="font-size:11px;color:var(--green)">✓ Nómina detectada del CSV</div>':'<div style="font-size:11px;color:var(--text3)">Proyectado — toca para actualizar</div>'}
+        </div>
+        <button class="btn bdk bsm" onclick="openModal('income')">✏️ Editar</button>
+      </div>
+    </div>
+
     <div class="cf fu" style="display:flex;align-items:center;gap:10px">
       <span style="font-size:16px">📂</span>
       <label style="flex:1;font-size:13px;color:var(--blue);font-weight:700;cursor:pointer">
@@ -508,13 +537,16 @@ function rGastos(){
     <div class="card fu">
       ${exps.length===0?`<div style="color:var(--text3);text-align:center;padding:30px 0">Sin gastos en ${MONTHS[S.month]}</div>`:''}
       ${exps.map(e=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`
-      <div class="er">
+      <div class="er" onclick="openEditExpense('${e.id}')" style="cursor:pointer">
         <div class="ei" style="background:${cat.bg}">${cat.e}</div>
-        <div style="flex:1;min-width:0"><div class="en">${e.desc}</div>
-        <div class="em">${e.date}${e.src==='revolut'?` · <span style="color:var(--blue)">🔄 Revolut</span>`:''}${e.fixed?' · 📌':''}</div></div>
+        <div style="flex:1;min-width:0">
+          <div class="en">${e.alias||e.desc}</div>
+          ${e.alias?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${e.desc}</div>`:''}
+          <div class="em">${e.date}${e.src==='santander_csv'||e.src==='santander_xlsx'?' · 🏦':e.src==='revolut'?` · <span style="color:var(--blue)">🔄</span>`:''}${e.fixed?' · 📌':''}</div>
+        </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
           <div class="ea">-${fmtD(e.amount)}</div>
-          <button onclick="deleteExpense('${e.id}')" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-weight:600">Eliminar</button>
+          <button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-weight:600">✕</button>
         </div>
       </div>`}).join('')}
     </div>
@@ -745,6 +777,49 @@ function renderModal(){
     </div></div>`;
   }
 
+  if(S.modal==='editExpense'){
+    const e=S.expenses.find(x=>x.id===S.pendingEditExpenseId);
+    if(!e){closeModal();return;}
+    div.innerHTML=`<div class="mdbg" onclick="closeModal()"><div class="mds" onclick="event.stopPropagation()">
+      <div class="mdh"></div><div class="mdt">✏️ Editar gasto</div>
+      <div class="ig">
+        <label class="lbl">Alias (nombre para mostrar)</label>
+        <input class="inp" id="ea" value="${e.alias||''}" placeholder="${e.desc}"/>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Original: ${e.desc}</div>
+      </div>
+      <div class="ig"><label class="lbl">Categoría</label>
+        <select class="inp" id="ec">${CATS.map(c=>`<option value="${c.id}" ${e.cat===c.id?'selected':''}>${c.e} ${c.l}</option>`).join('')}</select>
+      </div>
+      <div class="ig" style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+        <div><div style="font-weight:600;font-size:14px">¿Gasto fijo recurrente?</div></div>
+        <button class="tgl ${e.fixed?'on':''}" id="efx" onclick="this.classList.toggle('on')"></button>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn bol bfw" onclick="closeModal()">Cancelar</button>
+        <button class="btn bdk bfw" onclick="saveEditExpense()">Guardar</button>
+      </div>
+    </div></div>`;
+  }
+
+  if(S.modal==='income'){
+    const key=getMonthKey(S.year,S.month);
+    const cur=S.incomes[key]||0;
+    div.innerHTML=`<div class="mdbg" onclick="closeModal()"><div class="mds" onclick="event.stopPropagation()">
+      <div class="mdh"></div><div class="mdt">💰 Ingreso de ${MONTHS[S.month]}</div>
+      <div class="ig">
+        <label class="lbl">Importe recibido (€)</label>
+        <input class="inp" id="ii" type="number" step="0.01" value="${cur||''}" placeholder="1400.00"/>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+        Introduce el importe neto que recibiste este mes. Se usará para calcular tu presupuesto real.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn bol bfw" onclick="closeModal()">Cancelar</button>
+        <button class="btn bdk bfw" onclick="saveIncome()">Guardar</button>
+      </div>
+    </div></div>`;
+  }
+
   if(S.modal==='delGoal'){
     div.innerHTML=`<div class="mdbg" onclick="closeModal()"><div class="mds" onclick="event.stopPropagation()">
       <div class="mdh"></div><div class="mdt">¿Eliminar objetivo?</div>
@@ -758,6 +833,46 @@ function renderModal(){
 
   document.body.appendChild(div);
 }
+
+
+// ── EDITAR GASTO ───────────────────────────────────────────
+window.openEditExpense=id=>{
+  S.pendingEditExpenseId=id;
+  S.modal='editExpense';
+  renderModal();
+};
+
+window.saveEditExpense=async()=>{
+  const id=S.pendingEditExpenseId;
+  const alias=document.getElementById('ea')?.value?.trim();
+  const cat=document.getElementById('ec')?.value;
+  const fixed=document.getElementById('efx')?.classList.contains('on');
+  S.expenses=S.expenses.map(e=>e.id===id?{...e,alias:alias||undefined,cat,fixed}:e);
+  closeModal();toast('✓ Gasto actualizado');render();
+  localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
+  try{
+    await apiFetch(`/api/expenses/${id}`,{method:'POST',
+      body:JSON.stringify({alias,category:cat,fixed})});
+  }catch{}
+};
+
+// ── INGRESOS ───────────────────────────────────────────────
+window.saveIncome=async()=>{
+  const amt=parseFloat(document.getElementById('ii')?.value)||0;
+  if(!amt){toast('Introduce un importe');return;}
+  const key=getMonthKey(S.year,S.month);
+  S.incomes[key]=amt;
+  // Actualizar lastYearIncomes para proyecciones futuras
+  S.settings.lastYearIncomes[S.month]=Math.round(amt/(1+S.settings.ipcRate/100));
+  closeModal();toast(`✓ Ingreso de ${fmt(amt)} guardado`);render();
+  localStorage.setItem('fs_incomes',JSON.stringify(S.incomes));
+  localStorage.setItem('fs_settings',JSON.stringify(S.settings));
+  try{
+    await apiFetch('/api/incomes',{method:'POST',
+      body:JSON.stringify({month:key,amount:amt})});
+    await apiFetch('/api/settings',{method:'POST',body:JSON.stringify(S.settings)});
+  }catch{}
+};
 
 // ── ACTIONS BÁSICAS ────────────────────────────────────────
 window.setView=v=>{S.view=v;render();};
@@ -912,12 +1027,19 @@ async function syncFromWorker(silent=false){
   if(!S.workerUrl||!S.token) return false;
   try{
     setLoading(true);
-    const [expenses,goals,settings]=await Promise.all([
+    const [expenses,goals,settings,incomes]=await Promise.all([
       apiFetch('/api/expenses'),
       apiFetch('/api/goals'),
       apiFetch('/api/settings'),
+      apiFetch('/api/incomes').catch(()=>[]),
     ]);
-    S.expenses=expenses.map(e=>({
+    // Merge incomes
+    if(Array.isArray(incomes)){
+      incomes.forEach(i=>{ if(i.month&&i.amount) S.incomes[i.month]=i.amount; });
+      localStorage.setItem('fs_incomes',JSON.stringify(S.incomes));
+    }
+
+    const remoteExps=expenses.map(e=>({
       id:e.id,
       desc:e.description||e.desc||'Gasto',
       amount:parseFloat(e.amount)||0,
@@ -926,6 +1048,29 @@ async function syncFromWorker(silent=false){
       fixed:e.fixed||false,
       src:e.source||e.src||'manual',
     }));
+
+    // Merge: unir local + remoto sin duplicados
+    // El Worker es fuente de verdad para lo que tiene,
+    // pero no descarta lo que hay en local y no está en el Worker
+    const dedupKey=e=>`${e.date}|${e.desc}|${e.amount}`;
+    const remoteKeys=new Set(remoteExps.map(dedupKey));
+    const localOnly=S.expenses.filter(e=>!remoteKeys.has(dedupKey(e)));
+    S.expenses=[...remoteExps,...localOnly];
+
+    // Si hay gastos locales que el Worker no tiene, subirlos en background
+    if(localOnly.length>0){
+      (async()=>{
+        for(const exp of localOnly){
+          try{
+            await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
+              description:exp.desc,amount:exp.amount,category:exp.cat,
+              date:exp.date,fixed:exp.fixed,source:exp.src||'csv'
+            })});
+          }catch{break;}
+        }
+      })();
+    }
+
     S.goals=goals.map(g=>({
       id:g.id,
       l:g.label||g.l,
@@ -942,7 +1087,7 @@ async function syncFromWorker(silent=false){
     localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
     localStorage.setItem('fs_goals',JSON.stringify(S.goals));
     localStorage.setItem('fs_settings',JSON.stringify(S.settings));
-    if(!silent) toast('✓ Sincronizado');
+    if(!silent) toast(`✓ Sincronizado (${S.expenses.length} gastos)`);
     return true;
   }catch(e){
     if(e.message==='unauthorized'){
@@ -966,6 +1111,8 @@ function loadLocalCache(){
     if(e) S.expenses=JSON.parse(e);
     if(g) S.goals=JSON.parse(g);
     if(cfg) S.settings={...S.settings,...JSON.parse(cfg)};
+    const inc=localStorage.getItem('fs_incomes');
+    if(inc) S.incomes={...S.incomes,...JSON.parse(inc)};
   }catch{}
 }
 
