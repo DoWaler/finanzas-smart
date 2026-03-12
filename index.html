@@ -1341,6 +1341,8 @@ window.handleCSV=input=>{
     }
 
     const newExps=[];let n=0;let skipped=0;
+    const csvCandidates=[];
+    const INCOME_KEYWORDS=/sueldo|salar|nomina|nómina|haberes/i;
     for(let i=headerIdx+1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(cols.length<4) continue;
@@ -1351,11 +1353,20 @@ window.handleCSV=input=>{
 
       // Limpiar importe: − Unicode (U+2212) y formato español
       const amtClean=rawAmt
-        .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2212\uFE58\uFE63\uFF0D\u002D]/g,'-')
+        .replace(/[‐‑‒–—―−﹘﹣－]/g,'-')
         .replace(/[^0-9,.-]/g,'')
         .replace(/\.(?=\d{3}[,.])/g,'')
         .replace(',','.');
       const amt=parseFloat(amtClean);
+
+      // Detectar ingresos/nóminas
+      if(!isNaN(amt)&&amt>0){
+        if(INCOME_KEYWORDS.test(desc)){
+          const dateStr=normalizeDate(rawDate);
+          csvCandidates.push({date:dateStr,key:dateStr.slice(0,7),amount:amt,desc});
+        }
+        skipped++;continue;
+      }
       if(isNaN(amt)||amt>=0){skipped++;continue;}
 
       newExps.push({
