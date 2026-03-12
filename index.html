@@ -865,7 +865,7 @@ function renderModal(){
         <div style="font-size:12px;color:var(--text2);margin-top:4px">${c.date} · ${c.desc.slice(0,60)}</div>
       </div>
       <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
-        Cobrado el día ${c.date.slice(8)} → se asignará como ingreso de <b>${mNames}</b>
+        Cobrado el día ${c.date.slice(8)} de ${MONTHS[parseInt(c.date.slice(5,7))-1]} → se asignará como ingreso de <b>${mNames}</b>
       </p>
       <div style="display:flex;gap:10px">
         <button class="btn bol bfw" onclick="confirmIncome(false)">No es nómina</button>
@@ -895,23 +895,13 @@ function renderModal(){
 // Ejemplo: cobras 25/02 → cubre Feb (25-28) y Marzo completo
 
 function incomeMonthsForPayday(dateStr){
-  // dateStr: YYYY-MM-DD, cobro el día 25
+  // Cobras el día 25 → ese salario ES el ingreso del mes siguiente
+  // Ej: cobras 25/01 → ingreso de Febrero
+  // Los gastos del 25/01 al 24/02 van contra ese salario
   const d=new Date(dateStr+'T12:00:00');
-  const day=d.getDate();
-  const payDay=S.settings.payDay||25;
-  const months=[];
-  if(day>=payDay){
-    // Cobrado en este mes → aplica a este mes Y al siguiente
-    months.push(dateStr.slice(0,7)); // este mes
-    const next=new Date(d.getFullYear(),d.getMonth()+1,1);
-    months.push(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
-  } else {
-    // Cobrado antes del día 25 → aplica solo al mes anterior y este
-    const prev=new Date(d.getFullYear(),d.getMonth()-1,1);
-    months.push(`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`);
-    months.push(dateStr.slice(0,7));
-  }
-  return months;
+  const next=new Date(d.getFullYear(),d.getMonth()+1,1);
+  const nextKey=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`;
+  return [nextKey];
 }
 
 let _incomeCandidates=[];
