@@ -1351,10 +1351,9 @@ window.handleCSV=input=>{
 
       // Limpiar importe: − Unicode (U+2212) y formato español
       const amtClean=rawAmt
-        .replace(/\u2212/g,'-')
-        .replace(/−/g,'-')
+        .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2212\uFE58\uFE63\uFF0D\u002D]/g,'-')
         .replace(/[^0-9,.-]/g,'')
-        .replace(/\.(?=\d{3})/g,'')  // quitar puntos de miles
+        .replace(/\.(?=\d{3}[,.])/g,'')
         .replace(',','.');
       const amt=parseFloat(amtClean);
       if(isNaN(amt)||amt>=0){skipped++;continue;}
@@ -1417,7 +1416,7 @@ function normalizeDate(d){
 function cleanAmount(raw){
   if(!raw&&raw!==0) return NaN;
   // Santander usa U+2212 (minus sign) en lugar de U+002D (hyphen)
-  const cleaned=String(raw).replace(/\u2212/g,'-').replace(/\./g,'').replace(',','.');
+  const cleaned=String(raw).replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-').replace(/\.(?=\d{3}[,.])/g,'').replace(',','.');
   return parseFloat(cleaned);
 }
 
@@ -1485,9 +1484,9 @@ async function parseXlsx(file){
 
       // Importe — limpia U+2212, puntos de miles, coma decimal
       const rawAmt=String(row[iAmount]||'')
-        .replace(/−/g,'-')
-        .replace(/[^0-9,.\-]/g,'')
-        .replace(/\.(?=\d{3})/g,'')
+        .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+        .replace(/[^0-9,.-]/g,'')
+        .replace(/\.(?=\d{3}[,.])/g,'')
         .replace(',','.');
       const amt=parseFloat(rawAmt);
       if(isNaN(amt)||amt>=0){skipped++;continue;}
