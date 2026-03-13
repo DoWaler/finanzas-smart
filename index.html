@@ -234,8 +234,15 @@ function getBudget(mi){
 
 function mExp(mi,yr){
   const y=yr||S.year;
-  const pfx=`${y}-${String(mi+1).padStart(2,'0')}`;
-  return S.expenses.filter(e=>e.date&&e.date.startsWith(pfx));
+  const pay=S.settings.payDay||25;
+  const prevM=mi===0?11:mi-1;
+  const prevY=mi===0?y-1:y;
+  const from=`${prevY}-${String(prevM+1).padStart(2,"0")}-${String(pay).padStart(2,"0")}`;
+  const to=`${y}-${String(mi+1).padStart(2,"0")}-${String(pay).padStart(2,"0")}`;
+  return S.expenses.filter(e=>{
+    if(!e.date) return false;
+    return e.date>from && e.date<=to;
+  });
 }
 
 function daysToPayday(){
@@ -482,16 +489,24 @@ function rHome(){
 }
 
 function isRecibo(e){
-  const d=(e.alias||e.desc||'').toLowerCase();
-  return d.startsWith('recibo') || /domicili|factura de |recibo /.test(d);
+  const d=(e.alias||e.desc||"").toLowerCase();
+  return d.startsWith("recibo") || /domicili|factura de |recibo |adeudo cuota|renting /.test(d);
 }
 function isPagoMovil(e){
-  const d=(e.alias||e.desc||'').toLowerCase();
-  return d.startsWith('pago movil');
+  const d=(e.alias||e.desc||"").toLowerCase();
+  return d.startsWith("pago movil");
 }
 function isApplePay(e){
-  const d=(e.alias||e.desc||'').toLowerCase();
-  return d.startsWith('compra ') || d.startsWith('compra	');
+  const d=(e.alias||e.desc||"").toLowerCase();
+  return d.startsWith("compra ");
+}
+function isBizum(e){
+  const d=(e.alias||e.desc||"").toLowerCase();
+  return d.startsWith("bizum a favor de");
+}
+function isEfectivo(e){
+  const d=(e.alias||e.desc||"").toLowerCase();
+  return /retirada de efectivo|cajero automatico|cajero autom/.test(d);
 }
 
 function rGastos(){
@@ -499,11 +514,18 @@ function rGastos(){
   const recibos=allExps.filter(e=>isRecibo(e));
   const pagoMovil=allExps.filter(e=>!isRecibo(e)&&isPagoMovil(e));
   const applePay=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&isApplePay(e));
-  const exps=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&!isApplePay(e));
+  const bizums=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&!isApplePay(e)&&isBizum(e));
+  const efectivo=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&!isApplePay(e)&&!isBizum(e)&&isEfectivo(e));
+  const exps=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&!isApplePay(e)&&!isBizum(e)&&!isEfectivo(e));
   const total=allExps.reduce((s,e)=>s+e.amount,0);
   const recibosTot=recibos.reduce((s,e)=>s+e.amount,0);
   const pagoMovilTot=pagoMovil.reduce((s,e)=>s+e.amount,0);
   const applePayTot=applePay.reduce((s,e)=>s+e.amount,0);
+  const bizumsTot=bizums.reduce((s,e)=>s+e.amount,0);
+  const efectivoTot=efectivo.reduce((s,e)=>s+e.amount,0);
+  const subs=getSubs();
+  const small=mExp(S.month).filter(e=>e.amount<10);
+  const smallTot=small.reduce((s,e)=>s+e.amount,0);
   const subs=getSubs();
   const small=mExp(S.month).filter(e=>e.amount<10);
   const smallTot=small.reduce((s,e)=>s+e.amount,0);
@@ -513,7 +535,7 @@ function rGastos(){
       <div class="pt">${MONTHS[S.month]}</div>
       <button class="btn bdk bsm" onclick="openModal('expense')">+ Añadir</button>
     </div>
-    <div class="ps fu">${exps.length} transacciones · ${fmtD(total)}</div>
+    <div class="ps fu">${allExps.length} transacciones · ${fmtD(total)} · <span style="color:var(--text3);font-size:11px">Del 25/${S.month===0?String(S.year-1)+"/"+(MONTHS[11]):String(S.year)+"/"+(MONTHS[S.month-1]||MONTHS[11])} al 25/${S.month+1}/${S.year}</span></div>
     ${pillsHtml()}
 
     <!-- Ingreso del mes -->
@@ -621,18 +643,23 @@ function rGastos(){
       const parts=[];
 
       // 🏦 Recibos domiciliados
-      if(recibos.length) parts.push(sectionHtml('Recibos domiciliados','🏦','#6B46C1','#F3EEFF','#6B46C1',recibos,recibosTot));
+      if(recibos.length) parts.push(sectionHtml("Recibos domiciliados","🏦","#6B46C1","#F3EEFF","#6B46C1",recibos,recibosTot));
 
       // 📱 Pagos NFC / móvil
-      if(pagoMovil.length) parts.push(sectionHtml('Pagos NFC con móvil','📱','#2D9B6F','#E8F5EE','#2D9B6F',pagoMovil,pagoMovilTot));
+      if(pagoMovil.length) parts.push(sectionHtml("Pagos NFC con móvil","📱","#2D9B6F","#E8F5EE","#2D9B6F",pagoMovil,pagoMovilTot));
 
       // 🍎 Apple Pay
-      if(applePay.length) parts.push(sectionHtml('Apple Pay','🍎','#1a1a1a','#F5F5F5','#1a1a1a',applePay,applePayTot));
+      if(applePay.length) parts.push(sectionHtml("Apple Pay","🍎","#1a1a1a","#F5F5F5","#1a1a1a",applePay,applePayTot));
+
+      // 📲 Bizums enviados
+      if(bizums.length) parts.push(sectionHtml("Bizums enviados","📲","#0077CC","#E6F3FF","#0077CC",bizums,bizumsTot));
+
+      // 🏧 Efectivo
+      if(efectivo.length) parts.push(sectionHtml("Retiradas de efectivo","🏧","#718096","#F7F7F7","#718096",efectivo,efectivoTot));
 
       // 💳 Resto de gastos
       const restoTot=exps.reduce((s,e)=>s+e.amount,0);
-      if(exps.length) parts.push(sectionHtml('Resto de gastos','💳','#D4820A','#FEF3E2','#D4820A',exps,restoTot));
-
+      if(exps.length) parts.push(sectionHtml("Resto de gastos","💳","#D4820A","#FEF3E2","#D4820A",exps,restoTot));
       if(!allExps.length) parts.push(`<div class="card fu"><div style="color:var(--text3);text-align:center;padding:30px 0">Sin gastos en ${MONTHS[S.month]}</div></div>`);
 
       return parts.join('');
