@@ -481,9 +481,29 @@ function rHome(){
   </div>`;
 }
 
+function isRecibo(e){
+  const d=(e.alias||e.desc||'').toLowerCase();
+  return d.startsWith('recibo') || /domicili|factura de |recibo /.test(d);
+}
+function isPagoMovil(e){
+  const d=(e.alias||e.desc||'').toLowerCase();
+  return d.startsWith('pago movil');
+}
+function isApplePay(e){
+  const d=(e.alias||e.desc||'').toLowerCase();
+  return d.startsWith('compra ') || d.startsWith('compra	');
+}
+
 function rGastos(){
-  const exps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
-  const total=exps.reduce((s,e)=>s+e.amount,0);
+  const allExps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
+  const recibos=allExps.filter(e=>isRecibo(e));
+  const pagoMovil=allExps.filter(e=>!isRecibo(e)&&isPagoMovil(e));
+  const applePay=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&isApplePay(e));
+  const exps=allExps.filter(e=>!isRecibo(e)&&!isPagoMovil(e)&&!isApplePay(e));
+  const total=allExps.reduce((s,e)=>s+e.amount,0);
+  const recibosTot=recibos.reduce((s,e)=>s+e.amount,0);
+  const pagoMovilTot=pagoMovil.reduce((s,e)=>s+e.amount,0);
+  const applePayTot=applePay.reduce((s,e)=>s+e.amount,0);
   const subs=getSubs();
   const small=mExp(S.month).filter(e=>e.amount<10);
   const smallTot=small.reduce((s,e)=>s+e.amount,0);
