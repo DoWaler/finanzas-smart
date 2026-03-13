@@ -138,12 +138,140 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
 .fvr:last-child{border-bottom:none;}
 .snowball{border-radius:50%;background:linear-gradient(135deg,#7ECFBA,#87CEDA);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(126,207,186,.4);}
 .gc{border-radius:var(--r);padding:18px;margin-bottom:12px;}
+
+/* ── DESKTOP LAYOUT ─────────────────────────────────────────── */
+@media (min-width: 768px) {
+  body{background:var(--surface2);}
+
+  #app{
+    flex-direction:row;
+    max-width:1200px;
+    margin:0 auto;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* Sidebar izquierda con nav vertical */
+  #bnav{
+    position:static;
+    flex-direction:column;
+    width:220px;
+    min-width:220px;
+    height:100vh;
+    border-top:none;
+    border-right:1px solid var(--border);
+    border-bottom:none;
+    padding:0;
+    box-shadow:none;
+    justify-content:flex-start;
+    padding-top:20px;
+    gap:4px;
+  }
+
+  /* Logo en sidebar */
+  #bnav::before{
+    content:'💰 FinanzasSmart';
+    display:block;
+    font-family:var(--serif);
+    font-size:18px;
+    font-style:italic;
+    font-weight:700;
+    padding:8px 20px 20px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:8px;
+    width:100%;
+    box-sizing:border-box;
+  }
+
+  .nb{
+    flex-direction:row;
+    justify-content:flex-start;
+    padding:12px 20px;
+    font-size:13px;
+    gap:12px;
+    border-radius:10px;
+    margin:0 8px;
+    width:calc(100% - 16px);
+    box-sizing:border-box;
+    text-transform:none;
+    letter-spacing:0;
+  }
+  .nb svg{width:20px;height:20px;}
+  .nb.active{background:var(--surface2);color:var(--text);}
+  .nb.active svg{transform:none;}
+
+  /* Área de contenido principal */
+  #content{
+    flex:1;
+    overflow-y:auto;
+    background:var(--bg);
+    height:100vh;
+  }
+
+  /* Topbar de escritorio */
+  #topbar{
+    padding:20px 32px 16px;
+    background:var(--bg);
+  }
+
+  /* Contenido centrado con max-width generoso */
+  #ci{
+    max-width:720px;
+    padding:24px 32px 60px;
+    margin:0 auto;
+  }
+
+  /* Cards en grid de 2 columnas donde tiene sentido */
+  .card-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .card-grid .card{margin-bottom:0;}
+
+  /* Modales más anchos en PC */
+  .modal-box{
+    max-width:480px;
+    border-radius:16px;
+    margin:40px auto;
+  }
+
+  /* Pills de meses más espaciadas */
+  .mpills{
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .mpill{
+    min-width:58px;
+    padding:8px 14px;
+  }
+
+  /* Tarjeta hero más grande */
+  .bcard{
+    padding:28px;
+  }
+
+  /* Scroll más suave */
+  #content::-webkit-scrollbar{width:6px;}
+  #content::-webkit-scrollbar-track{background:transparent;}
+  #content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  #content::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+  /* En desktop el título ya está en el sidebar */
+  .tbar-title{display:none;}
+  #topbar{border-bottom:1px solid var(--border);}
+}
+
+@media (min-width:1024px){
+  #app{max-width:1300px;}
+  #ci{max-width:800px;}
+  #bnav{width:240px;min-width:240px;}
+}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="topbar">
-    <span class="tbar-title">FinanzasSmart</span>
+    <span class="tbar-title" style="display:flex;align-items:center;gap:8px">FinanzasSmart</span>
     <div style="display:flex;gap:8px">
       <button class="icon-btn" id="thbtn">🌙</button>
       <button class="icon-btn" onclick="openModal('settings')">⚙️</button>
