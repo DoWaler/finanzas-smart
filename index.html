@@ -505,9 +505,14 @@ function rHome(){
   // Ahorro adaptativo en modo supervivencia
   const targetSavings=b.savingsAmt+b.goalTotal;
   const remainingFromIncome=b.income-spent;  // puede ser negativo
+  const MIN_DAILY=17; // mínimo garantizado por día para poder gastar
+  // Nuevo objetivo de ahorro = lo que queda tras reservar MIN_DAILY€/día restantes
+  const newSavings=dLeft>0?Math.max(0,remainingFromIncome-(MIN_DAILY*dLeft)):Math.max(0,remainingFromIncome);
+  // Nuevo presupuesto diario con el objetivo ajustado
+  const newDailyBudget=dLeft>0?(remainingFromIncome-newSavings)/dLeft:0;
   // savingsStatus: "ok" | "adjusted" | "negative"
   const savingsStatus=!survivor?"ok":remainingFromIncome>0?"adjusted":"negative";
-  const realisticSavings=remainingFromIncome;  // puede ser negativo
+  const realisticSavings=remainingFromIncome>0?newSavings:remainingFromIncome; // negativo si se pasó del ingreso
   const savingsToShow=savingsStatus==="ok"?targetSavings:realisticSavings;
 
   const isDesktop=window.innerWidth>=900;
@@ -540,7 +545,14 @@ function rHome(){
           ${dailyBudget>0
             ?`<div style="font-size:11px;color:var(--text3)">Presupuesto/día</div><div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(dailyBudget)}</div>`
             :savingsStatus==="adjusted"
-              ?`<div style="font-size:11px;color:#FFB347;font-weight:700">🎯 Nuevo objetivo de ahorro</div><div style="font-size:22px;font-weight:800;color:#FFB347">${fmt(realisticSavings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">Objetivo original <span style="text-decoration:line-through">${fmt(targetSavings)}</span></div>`
+              ?`<div style="font-size:11px;color:#FFB347;font-weight:700">🎯 Nuevo objetivo de ahorro</div>
+                <div style="font-size:22px;font-weight:800;color:#FFB347">${fmt(realisticSavings)}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">Objetivo original <span style="text-decoration:line-through">${fmt(targetSavings)}</span></div>
+                ${dLeft>0?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,179,71,.3)">
+                  <div style="font-size:10px;color:#FFB347;font-weight:700">NUEVO LÍMITE DIARIO</div>
+                  <div style="font-size:18px;font-weight:800;color:#FFB347">${fmt(newDailyBudget)}/día</div>
+                  <div style="font-size:10px;color:var(--text3)">mín. ${MIN_DAILY}€ garantizados · ${dLeft}d restantes</div>
+                </div>`:""}` 
               :`<div style="font-size:11px;color:var(--red);font-weight:700">❌ Mes en negativo</div><div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(realisticSavings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">Este mes no se ahorró</div>`
           }
         </div>
