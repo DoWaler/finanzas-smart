@@ -782,13 +782,14 @@ async function bulkAssignType(type){
   renderKeepScroll();
   toast(`✓ ${count} gastos marcados como ${type==="need"?"Necesidades":"Ocio"}`);
 
-  // Sincronizar con worker en background (sin bloquear UI)
+  // Sincronizar con worker — una sola llamada batch
   try{
-    for(const id of ids){
+    const updates=ids.map(id=>{
       const e=S.expenses.find(x=>x.id===id);
-      if(e) await apiFetch(`/api/expenses/${id}`,{method:'POST',
-        body:JSON.stringify({category:e.cat})});
-    }
+      return e?{id,category:e.cat}:null;
+    }).filter(Boolean);
+    await apiFetch('/api/expenses/batch-update',{method:'PATCH',
+      body:JSON.stringify(updates)});
   }catch(err){ console.warn('Sync bulk error:',err); }
 }
 function rGastos(){
@@ -1381,7 +1382,7 @@ window.saveEditExpense=async()=>{
   closeModal();toast('✓ Gasto actualizado');render();
   localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
   try{
-    await apiFetch(`/api/expenses/${id}`,{method:'POST',
+    await apiFetch(`/api/expenses/${id}`,{method:'PATCH',
       body:JSON.stringify({alias,category:cat,fixed})});
   }catch{}
 };
