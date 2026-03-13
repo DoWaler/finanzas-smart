@@ -458,6 +458,13 @@ function render(){
   document.getElementById('ci').innerHTML=(views[S.view]||rHome)();
   document.getElementById('content').scrollTo(0,0);
 }
+function renderKeepScroll(){
+  const scr=document.getElementById('content').scrollTop;
+  renderNav();
+  const views={home:rHome,gastos:rGastos,analisis:rAnalisis,objetivos:rObjetivos};
+  document.getElementById('ci').innerHTML=(views[S.view]||rHome)();
+  document.getElementById('content').scrollTop=scr;
+}
 
 function renderNav(){
   const tabs=[
@@ -717,13 +724,40 @@ function toggleSelectMode(){
 function toggleSelectId(id){
   if(S.selectedIds.has(id)) S.selectedIds.delete(id);
   else S.selectedIds.add(id);
-  // Re-render only the expense rows without full render for speed
-  render();
+  // Patch just this row's checkbox in the DOM — no scroll jump
+  const row=document.querySelector(`[data-eid="${id}"]`);
+  if(row){
+    const sel=S.selectedIds.has(id);
+    row.style.background=sel?'var(--surface2)':'transparent';
+    const box=row.querySelector('.sel-box');
+    if(box){
+      box.style.border=`2px solid ${sel?'var(--text)':'var(--border2)'}`;
+      box.style.background=sel?'var(--text)':'transparent';
+      box.innerHTML=sel?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':'';
+    }
+  }
+  // Update counter in bulk bar
+  const counter=document.getElementById('bulk-counter');
+  if(counter) counter.textContent=S.selectedIds.size+' seleccionados';
 }
 function selectAll(){
   const allExps=mExp(S.month);
   allExps.forEach(e=>S.selectedIds.add(e.id));
-  render();
+  // Patch all rows
+  allExps.forEach(e=>{
+    const row=document.querySelector(`[data-eid="${e.id}"]`);
+    if(row){
+      row.style.background='var(--surface2)';
+      const box=row.querySelector('.sel-box');
+      if(box){
+        box.style.border='2px solid var(--text)';
+        box.style.background='var(--text)';
+        box.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>';
+      }
+    }
+  });
+  const counter=document.getElementById('bulk-counter');
+  if(counter) counter.textContent=S.selectedIds.size+' seleccionados';
 }
 function bulkAssignType(type){
   // type = "need" | "want"
@@ -741,7 +775,7 @@ function bulkAssignType(type){
   S.selectMode=false;
   saveLocal();
   syncExpenses();
-  render();
+  renderKeepScroll();
   toast(`✓ ${count} gastos marcados como ${type==="need"?"Necesidades":"Ocio"}`);
 }
 function rGastos(){
@@ -849,8 +883,8 @@ function rGastos(){
         const typeLabel=CATS.find(c=>c.id===e.cat)?.type;
         const typeBadge=typeLabel==='need'?'<span style="font-size:9px;background:#EEF0FE;color:#6366f1;border-radius:4px;padding:1px 5px;font-weight:700">NEED</span>':typeLabel==='want'?'<span style="font-size:9px;background:#F9E8F5;color:#9B2D7A;border-radius:4px;padding:1px 5px;font-weight:700">WANT</span>':'<span style="font-size:9px;background:var(--surface2);color:var(--text3);border-radius:4px;padding:1px 5px;font-weight:700">SIN TIPO</span>';
         if(S.selectMode){
-          return`<div class="er" onclick="toggleSelectId('${e.id}')" style="cursor:pointer;background:${sel?'var(--surface2)':'transparent'};border-radius:8px;transition:background .15s">
-            <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${sel?'var(--text)':'var(--border2)'};background:${sel?'var(--text)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s">
+          return`<div class="er" data-eid="${e.id}" onclick="toggleSelectId('${e.id}')" style="cursor:pointer;background:${sel?'var(--surface2)':'transparent'};border-radius:8px;transition:background .15s">
+            <div class="sel-box" style="width:22px;height:22px;border-radius:6px;border:2px solid ${sel?'var(--text)':'var(--border2)'};background:${sel?'var(--text)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s">
               ${sel?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
             </div>
             <div class="ei" style="background:${cat.bg}">${cat.e}</div>
@@ -919,7 +953,7 @@ function rGastos(){
     <!-- Barra de clasificación bulk -->
     ${S.selectMode?`<div style="position:fixed;bottom:${window.innerWidth<900?'calc(72px + var(--safe-bot))':'24px'};left:50%;transform:translateX(-50%);z-index:200;background:var(--text);color:var(--bg);border-radius:16px;padding:14px 20px;box-shadow:0 8px 32px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;min-width:320px;max-width:500px">
       <div style="flex:1">
-        <div style="font-weight:800;font-size:14px">${S.selectedIds.size} seleccionados</div>
+        <div id="bulk-counter" style="font-weight:800;font-size:14px">${S.selectedIds.size} seleccionados</div>
         <div style="font-size:11px;opacity:.6;margin-top:1px">¿De qué tipo son estos gastos?</div>
       </div>
       <button onclick="selectAll()" style="background:rgba(255,255,255,.15);border:none;color:inherit;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Todos</button>
