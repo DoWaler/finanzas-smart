@@ -358,6 +358,13 @@ function rHome(){
   const reallyFree=Math.max(b.free-fixedAmt,0);
   const recent=[...exps].sort((a,x)=>x.date.localeCompare(a.date)).slice(0,4);
   const hasSnowball=S.snowballExtra>0;
+  // Ahorro adaptativo en modo supervivencia
+  const targetSavings=b.savingsAmt+b.goalTotal;
+  const remainingFromIncome=b.income-spent;  // puede ser negativo
+  // savingsStatus: "ok" | "adjusted" | "negative"
+  const savingsStatus=!survivor?"ok":remainingFromIncome>0?"adjusted":"negative";
+  const realisticSavings=remainingFromIncome;  // puede ser negativo
+  const savingsToShow=savingsStatus==="ok"?targetSavings:realisticSavings;
 
   return`
   <div>
@@ -375,8 +382,17 @@ function rHome(){
           <div style="font-size:11px;color:var(--red);margin-top:2px">Bloqueado</div>
         </div>
         <div style="flex:2;background:var(--surface);border-radius:var(--r-sm);padding:10px">
-          <div style="font-size:11px;color:var(--text3)">Presupuesto/día</div>
-          <div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(Math.max(dailyBudget,0))}</div>
+          ${dailyBudget>0
+            ?`<div style="font-size:11px;color:var(--text3)">Presupuesto/día</div>
+               <div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(dailyBudget)}</div>`
+            :savingsStatus==="adjusted"
+              ?`<div style="font-size:11px;color:#FFB347;font-weight:700">🎯 Nuevo objetivo de ahorro</div>
+                <div style="font-size:22px;font-weight:800;color:#FFB347">${fmt(realisticSavings)}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">Objetivo original <span style="text-decoration:line-through">${fmt(targetSavings)}</span></div>`
+              :`<div style="font-size:11px;color:var(--red);font-weight:700">❌ Mes en negativo</div>
+                <div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(realisticSavings)}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">Este mes no se ahorró</div>`
+          }
         </div>
       </div>
     </div>`:''}
@@ -390,7 +406,7 @@ function rHome(){
         <div style="width:1px;background:rgba(255,255,255,.15)"></div>
         <div><div style="font-size:11px;opacity:.6">Gastado</div><div style="font-size:15px;font-weight:800">${fmt(spent)}</div></div>
         <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-        <div><div style="font-size:11px;opacity:.6">Ahorro</div><div style="font-size:15px;font-weight:800">${fmt(b.savingsAmt+b.goalTotal)}</div></div>
+        <div><div style="font-size:11px;opacity:.6">Ahorro</div><div style="font-size:15px;font-weight:800;color:${savingsStatus==="negative"?"var(--red)":savingsStatus==="adjusted"?"#FFB347":"inherit"}">${fmt(savingsToShow)}</div>${savingsStatus==="adjusted"?`<div style="font-size:9px;opacity:.6;text-decoration:line-through">${fmt(targetSavings)}</div>`:savingsStatus==="negative"?`<div style="font-size:9px;color:var(--red);opacity:.8">sin ahorro</div>`:""}</div>
       </div>
     </div>
 
