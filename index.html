@@ -331,6 +331,8 @@ const S={
     {id:'car',l:'Coche',e:'🚗',color:'#2B6CB0',bg:'#EBF4FF',target:8000,saved:0,monthly:200,priority:3,deletable:false},
   ],
   snowballExtra:0,
+  selectMode:false,
+  selectedIds:new Set(),
   pendingDeleteGoalId:null,
   incomes:{},  // {"2026-03": 1400, "2026-02": 4200, ...}
   extraIncomes:[],  // [{id,date,key,amount,desc}]
@@ -707,6 +709,41 @@ function dtWrap(title,sub,html,btnHtml=""){
     <div class="dt-single">${html}</div>
   </div>`;
 }
+function toggleSelectMode(){
+  S.selectMode=!S.selectMode;
+  S.selectedIds=new Set();
+  render();
+}
+function toggleSelectId(id){
+  if(S.selectedIds.has(id)) S.selectedIds.delete(id);
+  else S.selectedIds.add(id);
+  // Re-render only the expense rows without full render for speed
+  render();
+}
+function selectAll(){
+  const allExps=mExp(S.month);
+  allExps.forEach(e=>S.selectedIds.add(e.id));
+  render();
+}
+function bulkAssignType(type){
+  // type = "need" | "want"
+  // Assign a default cat based on type for unclassified, keep cat if already correct type
+  const defaultCat=type==="need"?"other":"leisure";
+  S.expenses=S.expenses.map(e=>{
+    if(!S.selectedIds.has(e.id)) return e;
+    const currentCat=CATS.find(c=>c.id===e.cat);
+    // Only change if no cat or cat type mismatch
+    const newCat=(currentCat&&currentCat.type===type)?e.cat:defaultCat;
+    return {...e,cat:newCat};
+  });
+  const count=S.selectedIds.size;
+  S.selectedIds=new Set();
+  S.selectMode=false;
+  saveLocal();
+  syncExpenses();
+  render();
+  toast(`✓ ${count} gastos marcados como ${type==="need"?"Necesidades":"Ocio"}`);
+}
 function rGastos(){
   const allExps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
   const recibos=allExps.filter(e=>isRecibo(e));
@@ -728,7 +765,10 @@ function rGastos(){
   const _v=`<div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px" class="fu">
       <div class="pt">${MONTHS[S.month]}</div>
-      <button class="btn bdk bsm" onclick="openModal('expense')">+ Añadir</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn ${S.selectMode?'bdk':'bol'} bsm" onclick="toggleSelectMode()">${S.selectMode?'✕ Cancelar':'☑️ Clasificar'}</button>
+        ${!S.selectMode?`<button class="btn bdk bsm" onclick="openModal('expense')">+ Añadir</button>`:''}
+      </div>
     </div>
     <div class="ps fu">${allExps.length} transacciones · ${fmtD(total)} · <span style="color:var(--text3);font-size:11px">Del 25/${S.month===0?String(S.year-1)+"/"+(MONTHS[11]):String(S.year)+"/"+(MONTHS[S.month-1]||MONTHS[11])} al 25/${S.month+1}/${S.year}</span></div>
     ${pillsHtml()}
@@ -803,13 +843,30 @@ function rGastos(){
     </div>`:''}
 
     ${(()=>{
-      const expRow=(e)=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`
-        <div class="er" onclick="openEditExpense('${e.id}')" style="cursor:pointer">
+      const expRow=(e)=>{
+        const cat=CATS.find(c=>c.id===e.cat)||CATS[9];
+        const sel=S.selectedIds.has(e.id);
+        const typeLabel=CATS.find(c=>c.id===e.cat)?.type;
+        const typeBadge=typeLabel==='need'?'<span style="font-size:9px;background:#EEF0FE;color:#6366f1;border-radius:4px;padding:1px 5px;font-weight:700">NEED</span>':typeLabel==='want'?'<span style="font-size:9px;background:#F9E8F5;color:#9B2D7A;border-radius:4px;padding:1px 5px;font-weight:700">WANT</span>':'<span style="font-size:9px;background:var(--surface2);color:var(--text3);border-radius:4px;padding:1px 5px;font-weight:700">SIN TIPO</span>';
+        if(S.selectMode){
+          return`<div class="er" onclick="toggleSelectId('${e.id}')" style="cursor:pointer;background:${sel?'var(--surface2)':'transparent'};border-radius:8px;transition:background .15s">
+            <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${sel?'var(--text)':'var(--border2)'};background:${sel?'var(--text)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s">
+              ${sel?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
+            </div>
+            <div class="ei" style="background:${cat.bg}">${cat.e}</div>
+            <div style="flex:1;min-width:0">
+              <div class="en">${e.alias||e.desc}</div>
+              <div class="em">${e.date} ${typeBadge}</div>
+            </div>
+            <div class="ea">-${fmtD(e.amount)}</div>
+          </div>`;
+        }
+        return`<div class="er" onclick="openEditExpense('${e.id}')" style="cursor:pointer">
           <div class="ei" style="background:${cat.bg}">${cat.e}</div>
           <div style="flex:1;min-width:0">
             <div class="en">${e.alias||e.desc}</div>
             ${e.alias?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${e.desc}</div>`:''}
-            <div class="em">${e.date}${e.src==='santander_csv'||e.src==='santander_xlsx'?' · 🏦':e.src==='revolut'?' · 🔄':''}${e.fixed?' · 📌':''}</div>
+            <div class="em">${e.date}${e.src==='santander_csv'||e.src==='santander_xlsx'?' · 🏦':e.src==='revolut'?' · 🔄':''}${e.fixed?' · 📌':''} ${typeBadge}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
             <div class="ea">-${fmtD(e.amount)}</div>
@@ -859,9 +916,20 @@ function rGastos(){
 
       return parts.join('');
     })()}
+    <!-- Barra de clasificación bulk -->
+    ${S.selectMode?`<div style="position:fixed;bottom:${window.innerWidth<900?'calc(72px + var(--safe-bot))':'24px'};left:50%;transform:translateX(-50%);z-index:200;background:var(--text);color:var(--bg);border-radius:16px;padding:14px 20px;box-shadow:0 8px 32px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;min-width:320px;max-width:500px">
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:14px">${S.selectedIds.size} seleccionados</div>
+        <div style="font-size:11px;opacity:.6;margin-top:1px">¿De qué tipo son estos gastos?</div>
+      </div>
+      <button onclick="selectAll()" style="background:rgba(255,255,255,.15);border:none;color:inherit;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Todos</button>
+      <button onclick="bulkAssignType('need')" style="background:#6366f1;border:none;color:white;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer">🏠 Necesidad</button>
+      <button onclick="bulkAssignType('want')" style="background:#9B2D7A;border:none;color:white;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer">🎬 Ocio</button>
+    </div>`:''}
+
     <div style="height:20px"></div>
   </div>`;
-  return dtWrap(`${MONTHS[S.month]} - Gastos`,`${allExps.length} transacciones`,_v,`<button class="btn bdk" style="padding:10px 20px;font-size:13px" onclick="openModal('expense')">+ Añadir gasto</button>`);
+  return dtWrap(`${MONTHS[S.month]} - Gastos`,`${allExps.length} transacciones`,_v,`<button class="${S.selectMode?'btn bdk':'btn bol'}" style="padding:10px 18px;font-size:13px" onclick="toggleSelectMode()">${S.selectMode?'✕ Cancelar':'☑️ Clasificar'}</button><button class="btn bdk" style="padding:10px 20px;font-size:13px" onclick="openModal('expense')">+ Añadir gasto</button>`);
 }
 
 function rAnalisis(){
