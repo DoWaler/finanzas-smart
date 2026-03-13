@@ -585,26 +585,58 @@ function rGastos(){
       <div style="margin-top:2px">${small.length} gastos de menos de 10€ = <b>${fmtD(smallTot)}</b> este mes (${fmt(smallTot*12)}/año).</div></div>
     </div>`:''}
 
-    <div class="card fu">
-      ${exps.length===0?`<div style="color:var(--text3);text-align:center;padding:30px 0">Sin gastos en ${MONTHS[S.month]}</div>`:''}
-      ${exps.map(e=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`
-      <div class="er" onclick="openEditExpense('${e.id}')" style="cursor:pointer">
-        <div class="ei" style="background:${cat.bg}">${cat.e}</div>
-        <div style="flex:1;min-width:0">
-          <div class="en">${e.alias||e.desc}</div>
-          ${e.alias?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${e.desc}</div>`:''}
-          <div class="em">${e.date}${e.src==='santander_csv'||e.src==='santander_xlsx'?' · 🏦':e.src==='revolut'?` · <span style="color:var(--blue)">🔄</span>`:''}${e.fixed?' · 📌':''}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-          <div class="ea">-${fmtD(e.amount)}</div>
-          <button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-weight:600">✕</button>
-        </div>
-      </div>`}).join('')}
-    </div>
+    ${(()=>{
+      const expRow=(e)=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`
+        <div class="er" onclick="openEditExpense('${e.id}')" style="cursor:pointer">
+          <div class="ei" style="background:${cat.bg}">${cat.e}</div>
+          <div style="flex:1;min-width:0">
+            <div class="en">${e.alias||e.desc}</div>
+            ${e.alias?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${e.desc}</div>`:''}
+            <div class="em">${e.date}${e.src==='santander_csv'||e.src==='santander_xlsx'?' · 🏦':e.src==='revolut'?' · 🔄':''}${e.fixed?' · 📌':''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+            <div class="ea">-${fmtD(e.amount)}</div>
+            <button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-weight:600">✕</button>
+          </div>
+        </div>`;};
 
-    <div class="alrt ab fu" style="font-size:12px;display:flex;gap:8px">
-      <span>🔄</span><span>Pagos con <b>Revolut / Apple Pay</b> aparecen aquí automáticamente con el webhook configurado.</span>
-    </div>
+      const sectionHtml=(title,icon,color,bg,borderColor,list,tot)=>{
+        if(!list.length) return '';
+        return`<div class="card fu" style="border-left:3px solid ${borderColor};padding-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:30px;height:30px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:16px">${icon}</div>
+              <div>
+                <div style="font-weight:700;font-size:14px;color:var(--text1)">${title}</div>
+                <div style="font-size:11px;color:var(--text3)">${list.length} transacciones</div>
+              </div>
+            </div>
+            <div style="font-weight:800;font-size:16px;color:${color}">-${fmtD(tot)}</div>
+          </div>
+          <div style="border-top:1px solid var(--border);margin:0 -16px;margin-bottom:8px"></div>
+          ${list.map(e=>expRow(e)).join('')}
+        </div>`;
+      };
+
+      const parts=[];
+
+      // 🏦 Recibos domiciliados
+      if(recibos.length) parts.push(sectionHtml('Recibos domiciliados','🏦','#6B46C1','#F3EEFF','#6B46C1',recibos,recibosTot));
+
+      // 📱 Pagos NFC / móvil
+      if(pagoMovil.length) parts.push(sectionHtml('Pagos NFC con móvil','📱','#2D9B6F','#E8F5EE','#2D9B6F',pagoMovil,pagoMovilTot));
+
+      // 🍎 Apple Pay
+      if(applePay.length) parts.push(sectionHtml('Apple Pay','🍎','#1a1a1a','#F5F5F5','#1a1a1a',applePay,applePayTot));
+
+      // 💳 Resto de gastos
+      const restoTot=exps.reduce((s,e)=>s+e.amount,0);
+      if(exps.length) parts.push(sectionHtml('Resto de gastos','💳','#D4820A','#FEF3E2','#D4820A',exps,restoTot));
+
+      if(!allExps.length) parts.push(`<div class="card fu"><div style="color:var(--text3);text-align:center;padding:30px 0">Sin gastos en ${MONTHS[S.month]}</div></div>`);
+
+      return parts.join('');
+    })()}
     <div style="height:20px"></div>
   </div>`;
 }
