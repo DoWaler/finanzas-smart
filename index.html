@@ -140,131 +140,144 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
 .gc{border-radius:var(--r);padding:18px;margin-bottom:12px;}
 
 /* ── DESKTOP LAYOUT ─────────────────────────────────────────── */
-@media (min-width: 768px) {
-  body{background:var(--surface2);}
+@media (min-width:900px){
+  body{background:#F0F2F5;overflow:hidden;}
 
+  /* Layout raíz: sidebar + main */
   #app{
-    flex-direction:row;
-    max-width:1200px;
-    margin:0 auto;
+    display:grid;
+    grid-template-columns:240px 1fr;
+    grid-template-rows:100vh;
+    grid-template-areas:"sidebar main";
+    max-width:100vw;
     height:100vh;
     overflow:hidden;
   }
 
-  /* Sidebar izquierda con nav vertical */
+  /* ── Sidebar ── */
   #bnav{
+    grid-area:sidebar;
     position:static;
     flex-direction:column;
-    width:220px;
-    min-width:220px;
+    align-items:stretch;
+    justify-content:flex-start;
+    width:240px;
     height:100vh;
     border-top:none;
     border-right:1px solid var(--border);
-    border-bottom:none;
-    padding:0;
+    padding:0 12px 24px;
     box-shadow:none;
-    justify-content:flex-start;
-    padding-top:20px;
-    gap:4px;
+    background:var(--bg);
+    gap:2px;
+    overflow-y:auto;
   }
-
   /* Logo en sidebar */
   #bnav::before{
     content:'💰 FinanzasSmart';
     display:block;
-    font-family:var(--serif);
-    font-size:18px;
+    font-size:17px;
+    font-weight:800;
     font-style:italic;
-    font-weight:700;
-    padding:8px 20px 20px;
+    padding:22px 8px 18px;
     border-bottom:1px solid var(--border);
-    margin-bottom:8px;
-    width:100%;
-    box-sizing:border-box;
+    margin-bottom:10px;
+    color:var(--text);
   }
-
   .nb{
     flex-direction:row;
     justify-content:flex-start;
-    padding:12px 20px;
+    text-align:left;
+    padding:11px 14px;
     font-size:13px;
-    gap:12px;
+    font-weight:600;
+    gap:11px;
     border-radius:10px;
-    margin:0 8px;
-    width:calc(100% - 16px);
-    box-sizing:border-box;
     text-transform:none;
     letter-spacing:0;
+    width:100%;
+    box-sizing:border-box;
   }
-  .nb svg{width:20px;height:20px;}
-  .nb.active{background:var(--surface2);color:var(--text);}
+  .nb svg{width:18px;height:18px;flex-shrink:0;}
+  .nb.active{background:var(--surface2);}
   .nb.active svg{transform:none;}
 
-  /* Área de contenido principal */
+  /* ── Main area ── */
+  #topbar{display:none;}  /* No hace falta en desktop */
   #content{
-    flex:1;
+    grid-area:main;
     overflow-y:auto;
-    background:var(--bg);
+    background:#F0F2F5;
     height:100vh;
+    padding:0;
   }
-
-  /* Topbar de escritorio */
-  #topbar{
-    padding:20px 32px 16px;
-    background:var(--bg);
-  }
-
-  /* Contenido centrado con max-width generoso */
-  #ci{
-    max-width:720px;
-    padding:24px 32px 60px;
-    margin:0 auto;
-  }
-
-  /* Cards en grid de 2 columnas donde tiene sentido */
-  .card-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-  }
-  .card-grid .card{margin-bottom:0;}
-
-  /* Modales más anchos en PC */
-  .modal-box{
-    max-width:480px;
-    border-radius:16px;
-    margin:40px auto;
-  }
-
-  /* Pills de meses más espaciadas */
-  .mpills{
-    gap:6px;
-    flex-wrap:wrap;
-  }
-  .mpill{
-    min-width:58px;
-    padding:8px 14px;
-  }
-
-  /* Tarjeta hero más grande */
-  .bcard{
-    padding:28px;
-  }
-
-  /* Scroll más suave */
   #content::-webkit-scrollbar{width:6px;}
   #content::-webkit-scrollbar-track{background:transparent;}
   #content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
-  #content::-webkit-scrollbar-thumb:hover{background:var(--text3);}
-  /* En desktop el título ya está en el sidebar */
-  .tbar-title{display:none;}
-  #topbar{border-bottom:1px solid var(--border);}
-}
 
-@media (min-width:1024px){
-  #app{max-width:1300px;}
-  #ci{max-width:800px;}
-  #bnav{width:240px;min-width:240px;}
+  /* Contenedor inner: encabezado sticky + grid de contenido */
+  #ci{
+    max-width:1100px;
+    margin:0 auto;
+    padding:32px 32px 60px;
+  }
+
+  /* ── Cabecera de página en desktop ── */
+  .dt-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:24px;
+  }
+  .dt-header h1{
+    font-size:26px;
+    font-weight:800;
+    letter-spacing:-.5px;
+    margin:0;
+  }
+  .dt-header .dt-sub{
+    font-size:13px;
+    color:var(--text3);
+    margin-top:3px;
+  }
+
+  /* ── Grid principal 2 columnas ── */
+  .dt-grid{
+    display:grid;
+    grid-template-columns:1fr 360px;
+    gap:16px;
+    align-items:start;
+  }
+  .dt-col-left{min-width:0;}
+  .dt-col-right{min-width:0;}
+
+  /* Columna única para Gastos y Metas */
+  .dt-single{
+    max-width:700px;
+    margin:0 auto;
+    width:100%;
+  }
+
+  /* Pills de meses más espaciadas */
+  .mpills{gap:6px;flex-wrap:wrap;}
+  .mpill{min-width:56px;padding:7px 13px;}
+
+  /* Modal más centrado */
+  .modal-box{max-width:500px;border-radius:16px;margin:48px auto;}
+
+  /* Botón flotante en desktop: fijo en esquina */
+  .dt-fab{
+    position:fixed;
+    right:32px;
+    bottom:32px;
+    z-index:90;
+  }
+
+  /* Cards sin margin-bottom extra en grid */
+  .dt-grid .card,.dt-grid .bcard,.dt-grid .scard,.dt-grid .dcnt{
+    margin-bottom:0;
+  }
+  .dt-col-left > *,.dt-col-right > *{margin-bottom:14px;}
+  .dt-col-left > *:last-child,.dt-col-right > *:last-child{margin-bottom:0;}
 }
 </style>
 </head>
@@ -494,11 +507,22 @@ function rHome(){
   const realisticSavings=remainingFromIncome;  // puede ser negativo
   const savingsToShow=savingsStatus==="ok"?targetSavings:realisticSavings;
 
-  return`
-  <div>
-    ${pillsHtml()}
+  const isDesktop=window.innerWidth>=900;
 
-    ${survivor?`<div class="scard fu">
+  const heroCard=`<div class="bcard fu1">
+      <div style="font-size:11px;opacity:.6;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.8px">${MONTHS[S.month]} ${S.year} ${b.isFat?'· 💰 Mes gordo':''}</div>
+      <div style="font-size:13px;opacity:.65;margin-bottom:4px">Dinero realmente libre</div>
+      <div style="font-size:34px;font-weight:800;letter-spacing:-1px;margin-bottom:16px">${fmt(Math.max(reallyFree,0))}</div>
+      <div style="display:flex;gap:12px;position:relative;z-index:1">
+        <div><div style="font-size:11px;opacity:.6">Previsto</div><div style="font-size:15px;font-weight:800">${fmt(b.income)}</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+        <div><div style="font-size:11px;opacity:.6">Gastado</div><div style="font-size:15px;font-weight:800">${fmt(spent)}</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+        <div><div style="font-size:11px;opacity:.6">Ahorro</div><div style="font-size:15px;font-weight:800;color:${savingsStatus==="negative"?"var(--red)":savingsStatus==="adjusted"?"#FFB347":"inherit"}">${fmt(savingsToShow)}</div>${savingsStatus==="adjusted"?'<div style="font-size:9px;opacity:.6;text-decoration:line-through">'+fmt(targetSavings)+'</div>':savingsStatus==="negative"?'<div style="font-size:9px;color:var(--red);opacity:.8">sin ahorro</div>':""}</div>
+      </div>
+    </div>`;
+
+  const survivorCard=survivor?`<div class="scard fu">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:20px">🚨</span>
         <span style="font-weight:800;font-size:15px;color:var(--red)">Modo Supervivencia</span>
@@ -511,45 +535,25 @@ function rHome(){
         </div>
         <div style="flex:2;background:var(--surface);border-radius:var(--r-sm);padding:10px">
           ${dailyBudget>0
-            ?`<div style="font-size:11px;color:var(--text3)">Presupuesto/día</div>
-               <div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(dailyBudget)}</div>`
+            ?`<div style="font-size:11px;color:var(--text3)">Presupuesto/día</div><div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(dailyBudget)}</div>`
             :savingsStatus==="adjusted"
-              ?`<div style="font-size:11px;color:#FFB347;font-weight:700">🎯 Nuevo objetivo de ahorro</div>
-                <div style="font-size:22px;font-weight:800;color:#FFB347">${fmt(realisticSavings)}</div>
-                <div style="font-size:10px;color:var(--text3);margin-top:2px">Objetivo original <span style="text-decoration:line-through">${fmt(targetSavings)}</span></div>`
-              :`<div style="font-size:11px;color:var(--red);font-weight:700">❌ Mes en negativo</div>
-                <div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(realisticSavings)}</div>
-                <div style="font-size:10px;color:var(--text3);margin-top:2px">Este mes no se ahorró</div>`
+              ?`<div style="font-size:11px;color:#FFB347;font-weight:700">🎯 Nuevo objetivo de ahorro</div><div style="font-size:22px;font-weight:800;color:#FFB347">${fmt(realisticSavings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">Objetivo original <span style="text-decoration:line-through">${fmt(targetSavings)}</span></div>`
+              :`<div style="font-size:11px;color:var(--red);font-weight:700">❌ Mes en negativo</div><div style="font-size:22px;font-weight:800;color:var(--red)">${fmt(realisticSavings)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">Este mes no se ahorró</div>`
           }
         </div>
       </div>
-    </div>`:''}
+    </div>`:'';
 
-    <div class="bcard fu1">
-      <div style="font-size:11px;opacity:.6;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.8px">${MONTHS[S.month]} ${S.year} ${b.isFat?'· 💰 Mes gordo':''}</div>
-      <div style="font-size:13px;opacity:.65;margin-bottom:4px">Dinero realmente libre</div>
-      <div style="font-size:34px;font-weight:800;letter-spacing:-1px;margin-bottom:16px">${fmt(Math.max(reallyFree,0))}</div>
-      <div style="display:flex;gap:12px;position:relative;z-index:1">
-        <div><div style="font-size:11px;opacity:.6">Previsto</div><div style="font-size:15px;font-weight:800">${fmt(b.income)}</div></div>
-        <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-        <div><div style="font-size:11px;opacity:.6">Gastado</div><div style="font-size:15px;font-weight:800">${fmt(spent)}</div></div>
-        <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-        <div><div style="font-size:11px;opacity:.6">Ahorro</div><div style="font-size:15px;font-weight:800;color:${savingsStatus==="negative"?"var(--red)":savingsStatus==="adjusted"?"#FFB347":"inherit"}">${fmt(savingsToShow)}</div>${savingsStatus==="adjusted"?`<div style="font-size:9px;opacity:.6;text-decoration:line-through">${fmt(targetSavings)}</div>`:savingsStatus==="negative"?`<div style="font-size:9px;color:var(--red);opacity:.8">sin ahorro</div>`:""}</div>
-      </div>
-    </div>
-
-    <div class="dcnt fu2">
+  const countdownCard=`<div class="dcnt fu2">
       <span style="font-size:20px">📅</span>
       <div style="flex:1">
         <div style="font-weight:700;font-size:14px">${dLeft===0?'¡Hoy cobras!':dLeft===1?'Mañana cobras':`${dLeft} días para cobrar`}</div>
-        ${pred?`<div style="font-size:12px;margin-top:2px;color:${pred.willHave>=0?'var(--green)':'var(--red)'};font-weight:600">
-          ${pred.willHave>=0?`✓ Llegarás con ${fmt(pred.willHave)}`:`⚠ Al ritmo actual llegarás con ${fmt(pred.willHave)}`}
-        </div>`:''}
+        ${pred?`<div style="font-size:12px;margin-top:2px;color:${pred.willHave>=0?'var(--green)':'var(--red)'};font-weight:600">${pred.willHave>=0?`✓ Llegarás con ${fmt(pred.willHave)}`:`⚠ Al ritmo actual llegarás con ${fmt(pred.willHave)}`}</div>`:''}
       </div>
       <span style="font-size:20px;font-weight:800;color:${dLeft<=5?'var(--red)':dLeft<=10?'var(--yellow)':'var(--green)'}">${dLeft}d</span>
-    </div>
+    </div>`;
 
-    <div class="card fu2">
+  const fixedCard=`<div class="card fu2">
       <div class="st">💡 Fijos vs libre</div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <div style="flex:1;background:var(--red-bg);border-radius:var(--r-sm);padding:11px;text-align:center">
@@ -561,13 +565,11 @@ function rHome(){
           <div style="font-weight:800;font-size:17px;color:var(--green)">${fmt(Math.max(reallyFree,0))}</div>
         </div>
       </div>
-      <div class="pt-bar">
-        <div class="pf" style="width:${Math.min(fixedAmt/b.income*100,100)}%;background:var(--red)"></div>
-      </div>
+      <div class="pt-bar"><div class="pf" style="width:${Math.min(fixedAmt/b.income*100,100)}%;background:var(--red)"></div></div>
       <div style="font-size:11px;color:var(--text3);margin-top:5px">${Math.round(fixedAmt/b.income*100)}% ya comprometido en fijos</div>
-    </div>
+    </div>`;
 
-    <div class="card fu3">
+  const budgetCard=`<div class="card fu3">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <span class="st" style="margin-bottom:0">Presupuesto 50/30/20</span>
         <span style="font-size:12px;color:var(--text3)">Libre: ${fmt(b.free)}</span>
@@ -575,58 +577,80 @@ function rHome(){
       ${[{l:'🏠 Necesidades',budget:b.needs,spent:needsSpent,c:'#6366f1'},{l:'🎬 Ocio',budget:b.wants,spent:wantsSpent,c:survivor?'#D94F3D':'#9B2D7A',locked:survivor}].map(r=>{
         const pct=Math.min(r.budget>0?r.spent/r.budget:0,1);
         const over=r.spent>r.budget;
-        return`<div style="margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-            <span style="font-weight:600">${r.l}${r.locked?' 🔒':''}</span>
-            <span style="font-weight:700;color:${over?'var(--red)':'var(--text2)'}">${fmt(r.spent)} <span style="font-weight:400;color:var(--text3)">/ ${fmt(r.budget)}</span></span>
-          </div>
-          <div class="pt-bar"><div class="pf" style="width:${pct*100}%;background:${over?'var(--red)':pct>.8?'var(--yellow)':r.c}"></div></div>
-        </div>`;
+        return`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span style="font-weight:600">${r.l}${r.locked?' 🔒':''}</span><span style="font-weight:700;color:${over?'var(--red)':'var(--text2)'}"> ${fmt(r.spent)} <span style="font-weight:400;color:var(--text3)">/ ${fmt(r.budget)}</span></span></div><div class="pt-bar"><div class="pf" style="width:${pct*100}%;background:${over?'var(--red)':pct>.8?'var(--yellow)':r.c}"></div></div></div>`;
       }).join('')}
       <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--text2);font-weight:600">💰 Ahorro + metas</span>
         <span style="font-weight:800;color:var(--green)">${fmt(b.savingsAmt+b.goalTotal)}</span>
       </div>
-    </div>
+    </div>`;
 
-    ${hasSnowball?`<div class="card fu3" style="border:2px solid var(--green);background:var(--green-bg)">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="snowball" style="width:50px;height:50px;flex-shrink:0;animation:snowGrow .5s ease">
-          <span style="font-size:22px">❄️</span>
-        </div>
-        <div>
-          <div style="font-weight:800;font-size:15px;color:var(--green)">¡Efecto bola de nieve!</div>
-          <div style="font-size:13px;color:var(--green);margin-top:2px">Ahorraste ${fmt(S.snowballExtra)} extra. Se suma automáticamente a <b>${S.goals[0].l}</b> 🎯</div>
-        </div>
-      </div>
-    </div>`:''}
-
-    <div class="card fu4">
+  const recentCard=`<div class="card fu4">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span class="st" style="margin-bottom:0">Últimos gastos</span>
         <button onclick="setView('gastos')" style="background:none;border:none;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">Ver todos →</button>
       </div>
-      ${recent.length===0?`<div style="color:var(--text3);font-size:13px;text-align:center;padding:18px 0">Sin gastos este mes</div>`:''}
-      ${recent.map(e=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`
-      <div class="er">
-        <div class="ei" style="background:${cat.bg}">${cat.e}</div>
-        <div style="flex:1;min-width:0"><div class="en">${e.desc}</div>
-        <div class="em">${e.date}${e.src==='revolut'?' · 🔄':''} ${e.fixed?'· 📌':''}</div></div>
-        <div class="ea">-${fmtD(e.amount)}</div>
-      </div>`}).join('')}
-    </div>
+      ${recent.length===0?'<div style="color:var(--text3);font-size:13px;text-align:center;padding:18px 0">Sin gastos este mes</div>':''}
+      ${recent.map(e=>{const cat=CATS.find(c=>c.id===e.cat)||CATS[9];return`<div class="er"><div class="ei" style="background:${cat.bg}">${cat.e}</div><div style="flex:1;min-width:0"><div class="en">${e.desc}</div><div class="em">${e.date}${e.src==='revolut'?' · 🔄':''} ${e.fixed?'· 📌':''}</div></div><div class="ea">-${fmtD(e.amount)}</div></div>`;}).join('')}
+    </div>`;
 
-    <div class="card fu4" style="display:flex;align-items:center;gap:12px">
+  const streakCard=`<div class="card fu4" style="display:flex;align-items:center;gap:12px">
       <span style="font-size:32px">🔥</span>
       <div style="flex:1">
         <div style="font-weight:800;font-size:15px">${S.settings.savingsStreak} meses de racha</div>
         <div style="font-size:12px;color:var(--text3);margin-top:2px">${S.settings.savingsRate}% → ${S.settings.savingsRate+1}% el próximo mes si cumples</div>
-        <div class="pt-bar" style="margin-top:7px">
-          <div class="pf" style="width:${Math.min(S.settings.savingsRate/30*100,100)}%;background:linear-gradient(90deg,#F59E0B,#EF4444)"></div>
+        <div class="pt-bar" style="margin-top:7px"><div class="pf" style="width:${Math.min(S.settings.savingsRate/30*100,100)}%;background:linear-gradient(90deg,#F59E0B,#EF4444)"></div></div>
+      </div>
+    </div>`;
+
+  const snowCard=hasSnowball?`<div class="card fu3" style="border:2px solid var(--green);background:var(--green-bg)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="snowball" style="width:50px;height:50px;flex-shrink:0"><span style="font-size:22px">❄️</span></div>
+        <div><div style="font-weight:800;font-size:15px;color:var(--green)">¡Efecto bola de nieve!</div><div style="font-size:13px;color:var(--green);margin-top:2px">Ahorraste ${fmt(S.snowballExtra)} extra. Se suma automáticamente a <b>${S.goals[0]?.label||'tu objetivo'}</b> 🎯</div></div>
+      </div>
+    </div>`:'';
+
+  if(isDesktop){
+    return `<div>
+      <div class="dt-header">
+        <div>
+          <h1>${MONTHS[S.month]} ${S.year}${b.isFat?' 💰':''}</h1>
+          <div class="dt-sub">Resumen mensual</div>
+        <div style="margin-top:10px">${pillsHtml()}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="icon-btn" id="thbtn" onclick="toggleTheme()">🌙</button>
+          <button class="icon-btn" onclick="openModal('settings')">⚙️</button>
+          <button class="btn bdk" style="padding:10px 20px;font-size:13px" onclick="openModal('expense')">+ Añadir gasto</button>
         </div>
       </div>
-    </div>
+      <div class="dt-grid">
+        <div class="dt-col-left">
+          ${heroCard}
+          ${fixedCard}
+          ${budgetCard}
+          ${streakCard}
+        </div>
+        <div class="dt-col-right">
+          ${survivorCard}
+          ${countdownCard}
+          ${recentCard}
+          ${snowCard}
+        </div>
+      </div>
+    </div>`;
+  }
 
+  return`<div>
+    ${pillsHtml()}
+    ${survivorCard}
+    ${heroCard}
+    ${countdownCard}
+    ${fixedCard}
+    ${budgetCard}
+    ${snowCard}
+    ${recentCard}
+    ${streakCard}
     <div style="position:fixed;right:18px;bottom:calc(76px + var(--safe-bot));z-index:90">
       <button class="btn bdk" style="width:52px;height:52px;border-radius:50%;padding:0;font-size:22px;box-shadow:var(--shadow-md)" onclick="openModal('expense')">+</button>
     </div>
@@ -654,6 +678,20 @@ function isEfectivo(e){
   return /retirada de efectivo|cajero automatico|cajero autom/.test(d);
 }
 
+function dtWrap(title,sub,html,btnHtml=""){
+  if(window.innerWidth<900) return html;
+  return `<div>
+    <div class="dt-header">
+      <div><h1>${title}</h1><div class="dt-sub">${sub}</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="icon-btn" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn" onclick="openModal('settings')">⚙️</button>
+        ${btnHtml}
+      </div>
+    </div>
+    <div class="dt-single">${html.replace(/<div class="pt[^"]*">[^<]*<\/div>/,"").replace(/<div class="ps[^"]*">[^<]*<\/div>/,"")}<\/div>
+  <\/div>`;
+}
 function rGastos(){
   const allExps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
   const recibos=allExps.filter(e=>isRecibo(e));
@@ -672,7 +710,7 @@ function rGastos(){
   const small=mExp(S.month).filter(e=>e.amount<10);
   const smallTot=small.reduce((s,e)=>s+e.amount,0);
 
-  return`<div>
+  const _v=`<div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px" class="fu">
       <div class="pt">${MONTHS[S.month]}</div>
       <button class="btn bdk bsm" onclick="openModal('expense')">+ Añadir</button>
@@ -904,7 +942,7 @@ function rObjetivos(){
   const hasSnow=S.snowballExtra>0;
   const snowSize=Math.min(44+S.snowballExtra/8,90);
 
-  return`<div>
+  const _v=`<div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px" class="fu">
       <div class="pt">Metas</div>
       <button class="btn bdk bsm" onclick="openModal('goal')">+ Nueva</button>
@@ -1250,16 +1288,18 @@ window.clearLocalData=()=>{
   render();
 };
 
-document.getElementById('thbtn').onclick=()=>{
-  S.theme=S.theme==='light'?'dark':'light';
-  document.documentElement.setAttribute('data-theme',S.theme);
-  localStorage.setItem('theme',S.theme);
-  document.getElementById('thbtn').textContent=S.theme==='light'?'🌙':'☀️';
-};
-document.getElementById('thbtn').textContent=S.theme==='light'?'🌙':'☀️';
+function toggleTheme(){
+  S.theme=S.theme==="light"?"dark":"light";
+  document.documentElement.setAttribute("data-theme",S.theme);
+  localStorage.setItem("theme",S.theme);
+  document.querySelectorAll("#thbtn").forEach(b=>b.textContent=S.theme==="light"?"🌙":"☀️");
+}
+const _thb=document.getElementById("thbtn");
+if(_thb) _thb.onclick=toggleTheme;
+document.querySelectorAll("#thbtn").forEach(b=>b.textContent=S.theme==="light"?"🌙":"☀️");
 
 document.getElementById('content').addEventListener('scroll',function(){
-  document.getElementById('topbar').classList.toggle('scrolled',this.scrollTop>8);
+  const _tb=document.getElementById('topbar');if(_tb) _tb.classList.toggle('scrolled',this.scrollTop>8);
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1334,7 +1374,7 @@ async function doLogout(){
 // ─── PANTALLA LOGIN ───────────────────────────────────────
 function renderLogin(){
   document.getElementById('bnav').style.display='none';
-  document.getElementById('topbar').style.display='none';
+  const _tb2=document.getElementById('topbar');if(_tb2) _tb2.style.display='none';
   document.getElementById('ci').innerHTML=`
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
     <div style="width:100%;max-width:360px">
@@ -1394,7 +1434,7 @@ window.handleLogin=async()=>{
   const ok=await doLogin(user,pass);
   if(ok){
     document.getElementById('bnav').style.display='flex';
-    document.getElementById('topbar').style.display='flex';
+    const _tb3=document.getElementById('topbar');if(_tb3) _tb3.style.display='flex';
     await syncFromWorker(false);
   } else {
     if(btn){btn.textContent='Entrar';btn.disabled=false;}
@@ -1829,7 +1869,7 @@ if(S.token&&S.workerUrl){
   // Tiene sesión guardada — cargar desde localStorage sin llamar al Worker
   S.loggedIn=true;
   document.getElementById('bnav').style.display='flex';
-  document.getElementById('topbar').style.display='flex';
+  const _tb4=document.getElementById('topbar');if(_tb4) _tb3.style.display='flex';
   render();
   // Sin sync automático al arrancar — pulsa 🔄 para sincronizar manualmente
 } else {
