@@ -172,7 +172,7 @@ const CATS=[
 
 const S={
   view:'home', month:new Date().getMonth(), year:new Date().getFullYear(), theme:localStorage.getItem('theme')||'light', modal:null,
-  workerUrl:localStorage.getItem('worker_url')||'',
+  workerUrl:localStorage.getItem('worker_url')||'https://finanzas-smartpro.bravomatic19.workers.dev',
   token:localStorage.getItem('fs_token')||'',
   username:localStorage.getItem('fs_username')||'',
   loggedIn:false,
@@ -1133,11 +1133,19 @@ function renderLogin(){
         <button class="btn bdk bfw" id="li-btn" onclick="handleLogin()" style="margin-top:4px">Entrar</button>
       </div>
       <div style="margin-top:16px">
-        <div class="ig">
-          <label class="lbl">Worker URL</label>
-          <input class="inp" id="li-url" value="${S.workerUrl}" placeholder="https://...workers.dev" autocapitalize="none"/>
+        ${S.workerUrl
+          ? `<div style="font-size:12px;color:var(--text3);text-align:center;cursor:pointer" onclick="document.getElementById('url-field').style.display='block';this.style.display='none'">
+              🔗 ${S.workerUrl.replace('https://','').slice(0,30)}... <span style="color:var(--blue)">cambiar</span>
+            </div>
+            <div id="url-field" style="display:none">`
+          : `<div id="url-field">`
+        }
+          <div class="ig">
+            <label class="lbl">Worker URL</label>
+            <input class="inp" id="li-url" value="${S.workerUrl}" placeholder="https://...workers.dev" autocapitalize="none"/>
+          </div>
+          <button class="btn bgh bfw bsm" onclick="saveWorkerUrl()">Guardar URL</button>
         </div>
-        <button class="btn bgh bfw bsm" onclick="saveWorkerUrl()">Guardar URL</button>
       </div>
     </div>
   </div>`;
@@ -1207,18 +1215,9 @@ async function syncFromWorker(silent=false){
     const localOnly=S.expenses.filter(e=>!remoteKeys.has(dedupKey(e)));
     S.expenses=[...remoteExps,...localOnly];
 
-    // Si hay gastos locales que el Worker no tiene, subirlos en background
+    // Subir gastos locales al Worker en una sola llamada batch
     if(localOnly.length>0){
-      (async()=>{
-        for(const exp of localOnly){
-          try{
-            await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
-              description:exp.desc,amount:exp.amount,category:exp.cat,
-              date:exp.date,fixed:exp.fixed,source:exp.src||'csv'
-            })});
-          }catch{break;}
-        }
-      })();
+      uploadExpenses(localOnly).catch(()=>{});
     }
 
     S.goals=goals.map(g=>({
@@ -1589,13 +1588,15 @@ async function parseXlsx(file){
 }
 
 async function uploadExpenses(exps){
-  for(const exp of exps){
-    try{
-      await apiFetch('/api/expenses',{method:'POST',body:JSON.stringify({
-        description:exp.desc,amount:exp.amount,category:exp.cat,
-        date:exp.date,fixed:false,source:exp.src||'csv'
-      })});
-    }catch{break;}
+  if(!exps||!exps.length) return;
+  // Una sola llamada batch — no un loop de 400 llamadas
+  try{
+    await apiFetch('/api/expenses/batch',{method:'POST',body:JSON.stringify(
+      exps.map(e=>({description:e.desc,amount:e.amount,category:e.cat,
+        date:e.date,fixed:e.fixed||false,source:e.src||'csv',alias:e.alias}))
+    )});
+  }catch(e){
+    console.warn('Batch upload failed:',e.message);
   }
 }
 
@@ -1609,22 +1610,18 @@ document.querySelector('.tbar-title').insertAdjacentHTML('afterend',
 );
 // Añadir logout en ajustes — se hace desde el modal de settings
 
-// Auto-sync cada 5 min
-setInterval(()=>{ if(S.loggedIn) syncFromWorker(true); },5*60*1000);
-document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden&&S.loggedIn) syncFromWorker(true);
-});
+// Sin auto-sync automático — solo manual para no agotar el plan gratuito
 
 // ─── ARRANQUE ─────────────────────────────────────────────
 loadLocalCache();
 
 if(S.token&&S.workerUrl){
-  // Tiene sesión guardada — intentar restaurar
+  // Tiene sesión guardada — cargar desde localStorage sin llamar al Worker
   S.loggedIn=true;
   document.getElementById('bnav').style.display='flex';
   document.getElementById('topbar').style.display='flex';
   render();
-  syncFromWorker(true);
+  // Sin sync automático al arrancar — pulsa 🔄 para sincronizar manualmente
 } else {
   // Sin sesión — mostrar login
   renderLogin();
