@@ -1197,28 +1197,17 @@ async function syncFromWorker(silent=false){
       localStorage.setItem('fs_incomes',JSON.stringify(S.incomes));
     }
 
-    const remoteExps=expenses.map(e=>({
+    // El Worker es la fuente de verdad — reemplazar local con remoto
+    S.expenses=expenses.map(e=>({
       id:e.id,
       desc:e.description||e.desc||'Gasto',
       amount:parseFloat(e.amount)||0,
       cat:e.category||e.cat||'other',
       date:e.date||new Date().toISOString().slice(0,10),
       fixed:e.fixed||false,
+      alias:e.alias||undefined,
       src:e.source||e.src||'manual',
     }));
-
-    // Merge: unir local + remoto sin duplicados
-    // El Worker es fuente de verdad para lo que tiene,
-    // pero no descarta lo que hay en local y no está en el Worker
-    const dedupKey=e=>`${e.date}|${e.desc}|${e.amount}`;
-    const remoteKeys=new Set(remoteExps.map(dedupKey));
-    const localOnly=S.expenses.filter(e=>!remoteKeys.has(dedupKey(e)));
-    S.expenses=[...remoteExps,...localOnly];
-
-    // Subir gastos locales al Worker en una sola llamada batch
-    if(localOnly.length>0){
-      uploadExpenses(localOnly).catch(()=>{});
-    }
 
     S.goals=goals.map(g=>({
       id:g.id,
