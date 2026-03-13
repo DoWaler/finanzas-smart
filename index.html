@@ -161,11 +161,11 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
     flex-direction:column;
     align-items:stretch;
     justify-content:flex-start;
-    width:240px;
+    width:220px;
     height:100vh;
     border-top:none;
     border-right:1px solid var(--border);
-    padding:0 12px 24px;
+    padding:0 10px 24px;
     box-shadow:none;
     background:var(--bg);
     gap:2px;
@@ -175,31 +175,34 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
   #bnav::before{
     content:'💰 FinanzasSmart';
     display:block;
-    font-size:17px;
+    font-size:16px;
     font-weight:800;
     font-style:italic;
-    padding:22px 8px 18px;
+    padding:20px 10px 16px;
     border-bottom:1px solid var(--border);
-    margin-bottom:10px;
+    margin-bottom:8px;
     color:var(--text);
+    flex-shrink:0;
   }
   .nb{
     flex-direction:row;
     justify-content:flex-start;
     text-align:left;
-    padding:11px 14px;
+    padding:10px 12px;
     font-size:13px;
     font-weight:600;
-    gap:11px;
-    border-radius:10px;
+    gap:10px;
+    border-radius:8px;
     text-transform:none;
     letter-spacing:0;
     width:100%;
     box-sizing:border-box;
+    color:var(--text2);
   }
-  .nb svg{width:18px;height:18px;flex-shrink:0;}
-  .nb.active{background:var(--surface2);}
+  .nb svg{width:17px;height:17px;flex-shrink:0;}
+  .nb.active{background:var(--surface2);color:var(--text);}
   .nb.active svg{transform:none;}
+  .nb:hover{background:var(--surface2);color:var(--text);}
 
   /* ── Main area ── */
   #topbar{display:none;}  /* No hace falta en desktop */
@@ -689,8 +692,8 @@ function dtWrap(title,sub,html,btnHtml=""){
         ${btnHtml}
       </div>
     </div>
-    <div class="dt-single">${html.replace(/<div class="pt[^"]*">[^<]*<\/div>/,"").replace(/<div class="ps[^"]*">[^<]*<\/div>/,"")}<\/div>
-  <\/div>`;
+    <div class="dt-single">${html}</div>
+  </div>`;
 }
 function rGastos(){
   const allExps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
@@ -846,6 +849,7 @@ function rGastos(){
     })()}
     <div style="height:20px"></div>
   </div>`;
+  return dtWrap(`${MONTHS[S.month]} - Gastos`,`${allExps.length} transacciones`,_v,`<button class="btn bdk" style="padding:10px 20px;font-size:13px" onclick="openModal('expense')">+ Añadir gasto</button>`);
 }
 
 function rAnalisis(){
@@ -859,7 +863,7 @@ function rAnalisis(){
   const cumSav=savProj.map((_,i)=>savProj.slice(0,i+1).reduce((s,x)=>s+x,0));
   const maxCum=Math.max(...cumSav,1);
 
-  return`<div>
+  const _v=`<div>
     <div class="pt fu">Análisis</div>
     <div class="ps fu">Datos y consejos personalizados</div>
 
@@ -936,6 +940,7 @@ function rAnalisis(){
 
     <div style="height:20px"></div>
   </div>`;
+  return dtWrap("Análisis","Datos y consejos personalizados",_v);
 }
 
 function rObjetivos(){
@@ -995,6 +1000,7 @@ function rObjetivos(){
     }).join('')}
     <div style="height:20px"></div>
   </div>`;
+  return dtWrap("Metas","Objetivos de ahorro a largo plazo",_v,`<button class="btn bdk" style="padding:10px 20px;font-size:13px" onclick="openModal('goal')">+ Nueva meta</button>`);
 }
 
 // ── MODALS ─────────────────────────────────────────────────
