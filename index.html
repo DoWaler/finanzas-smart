@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="Finanzas"/>
-<title>El tieso</title>
+<title>FinanzasSmart</title>
 <link rel="manifest" href="manifest.json"/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
 <style>
@@ -287,7 +287,7 @@ input,select,button,textarea{font-family:var(--font);outline:none;}
 <body>
 <div id="app">
   <div id="topbar">
-    <span class="tbar-title" style="display:flex;align-items:center;gap:8px">EL Tieso</span>
+    <span class="tbar-title" style="display:flex;align-items:center;gap:8px">FinanzasSmart</span>
     <div style="display:flex;gap:8px">
       <button class="icon-btn" id="thbtn">🌙</button>
       <button class="icon-btn" onclick="openModal('settings')">⚙️</button>
@@ -759,24 +759,37 @@ function selectAll(){
   const counter=document.getElementById('bulk-counter');
   if(counter) counter.textContent=S.selectedIds.size+' seleccionados';
 }
-function bulkAssignType(type){
-  // type = "need" | "want"
-  // Assign a default cat based on type for unclassified, keep cat if already correct type
+async function bulkAssignType(type){
   const defaultCat=type==="need"?"other":"leisure";
+  const ids=[...S.selectedIds];
+  const count=ids.length;
+  if(!count) return;
+
+  // Actualizar en memoria
   S.expenses=S.expenses.map(e=>{
-    if(!S.selectedIds.has(e.id)) return e;
+    if(!ids.includes(e.id)) return e;
     const currentCat=CATS.find(c=>c.id===e.cat);
-    // Only change if no cat or cat type mismatch
     const newCat=(currentCat&&currentCat.type===type)?e.cat:defaultCat;
     return {...e,cat:newCat};
   });
-  const count=S.selectedIds.size;
+
+  // Guardar en localStorage
+  localStorage.setItem('fs_expenses',JSON.stringify(S.expenses));
+
+  // Salir del modo selección y re-renderizar
   S.selectedIds=new Set();
   S.selectMode=false;
-  saveLocal();
-  syncExpenses();
   renderKeepScroll();
   toast(`✓ ${count} gastos marcados como ${type==="need"?"Necesidades":"Ocio"}`);
+
+  // Sincronizar con worker en background (sin bloquear UI)
+  try{
+    for(const id of ids){
+      const e=S.expenses.find(x=>x.id===id);
+      if(e) await apiFetch(`/api/expenses/${id}`,{method:'POST',
+        body:JSON.stringify({category:e.cat})});
+    }
+  }catch(err){ console.warn('Sync bulk error:',err); }
 }
 function rGastos(){
   const allExps=[...mExp(S.month)].sort((a,b)=>b.date.localeCompare(a.date));
