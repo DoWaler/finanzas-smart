@@ -1825,6 +1825,13 @@ window.handleCSV=input=>{
     const unique=newExps.filter(e=>!existing.has(dedupKey(e)));
     const dupes=newExps.length-unique.length;
     S.expenses.push(...unique);
+    // Reclasificar con IA los gastos que quedaron en "other"
+    const reclassified = await guessCategoryAI(unique);
+    // Actualizar los que cambiaron de categoría
+    reclassified.forEach(e => {
+      const idx = S.expenses.findIndex(x => x.id === e.id);
+      if (idx >= 0) S.expenses[idx] = e;
+    });
     n=unique.length;
 
     if(n>0){
@@ -1855,6 +1862,31 @@ function guessCategory(m){
   if(/alquiler|hipoteca|comunidad|luz|agua|gas|internet|vodafone|movistar|orange/.test(s)) return "housing";
   if(/spotify|netflix|hbo|disney|prime|apple one|youtube premium|adobe/.test(s)) return "subs";
   return "other";
+}
+
+async function guessCategoryAI(expenses) {
+  if (!S.token || !S.workerUrl) return expenses;
+  // Solo reclasificar los que quedaron en "other"
+  const toClassify = expenses.filter(e => e.cat === "other");
+  if (!toClassify.length) return expenses;
+
+  const results = await Promise.allSettled(
+    toClassify.map(e =>
+      apiFetch("/api/classify", {
+        method: "POST",
+        body: JSON.stringify({ description: e.desc }),
+      }).then(r => ({ id: e.id, category: r.category }))
+    )
+  );
+
+  const updates = {};
+  results.forEach(r => {
+    if (r.status === "fulfilled") updates[r.value.id] = r.value.category;
+  });
+
+  return expenses.map(e =>
+    updates[e.id] ? { ...e, cat: updates[e.id] } : e
+  );
 }
 
 // Normaliza DD/MM/YYYY → YYYY-MM-DD
